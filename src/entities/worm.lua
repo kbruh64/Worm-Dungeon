@@ -10,20 +10,26 @@ local DASH_TIME = 0.18
 local INVULN_TIME = 0.5
 local COMBO_WINDOW = 0.6
 
+local BODY_LEN = 8        -- visible trailing body pixels
+local BODY_SPACING = 0.022 -- seconds of trail history between segments
+
 function Worm.new(x, y)
+    local trail = {}
+    for i = 1, 64 do trail[i] = { x = x, y = y, t = 0 } end
     return setmetatable({
-        x = x, y = y, w = 10, h = 8,
-        dir = 1,                 -- -1 left, +1 right (mouse-based)
+        x = x, y = y, w = 3, h = 3,
+        dir = 1,
         aimAngle = 0,
         hp = 6, maxHp = 6,
-        attack = nil,            -- current weapon name being executed
+        attack = nil,
         attackTimer = 0,
         comboCount = 0,
         comboTimer = 0,
         dashTimer = 0,
         invuln = 0,
-        segments = {},
+        trail = trail,
         kills = 0,
+        time = 0,
     }, Worm)
 end
 
@@ -103,7 +109,8 @@ function Worm:aimAt(gx, gy)
     self.dir = (dx >= 0) and 1 or -1
 end
 
-function Worm:update(dt, input)
+function Worm:update(dt, input, speedBonus)
+    self.time = self.time + dt
     self.attackTimer = math.max(0, self.attackTimer - dt)
     if self.attackTimer == 0 then self.attack = nil end
     self.comboTimer = math.max(0, self.comboTimer - dt)
@@ -118,7 +125,7 @@ function Worm:update(dt, input)
     if input.down then my = my + 1 end
     if mx ~= 0 and my ~= 0 then mx, my = mx * 0.707, my * 0.707 end
 
-    local speed = SPEED
+    local speed = SPEED * (1 + (speedBonus or 0))
     if self.dashTimer > 0 then
         speed = DASH_SPEED
         mx = math.cos(self.aimAngle)
@@ -128,28 +135,41 @@ function Worm:update(dt, input)
 
     self.x = self.x + mx * speed * dt
     self.y = self.y + my * speed * dt
-    self.x = math.max(8, math.min(GAME_W - 8 - self.w, self.x))
-    self.y = math.max(24, math.min(GAME_H - 8 - self.h, self.y))
+    self.x = math.max(4, math.min(GAME_W - 4 - self.w, self.x))
+    self.y = math.max(22, math.min(GAME_H - 6 - self.h, self.y))
 
-    table.insert(self.segments, 1, { x = self.x, y = self.y })
-    while #self.segments > 6 do table.remove(self.segments) end
+    table.insert(self.trail, 1, { x = self:centerX(), y = self:centerY(), t = self.time })
+    while #self.trail > 64 do table.remove(self.trail) end
 end
 
 function Worm:draw()
-    for i = #self.segments, 1, -1 do
-        local s = self.segments[i]
-        local a = 1 - (i / (#self.segments + 1))
-        love.graphics.setColor(0.2 + a * 0.3, 0.7 + a * 0.3, 0.2 + a * 0.3, 0.6)
-        love.graphics.rectangle("fill", math.floor(s.x), math.floor(s.y + 1), self.w - i, self.h - 2)
-    end
-
     local flicker = (self.invuln > 0 and math.floor(self.invuln * 20) % 2 == 0)
+
+    -- body: sample trail points at fixed time spacing back from head
     if not flicker then
-        love.graphics.setColor(0.3, 1, 0.3, 1)
-        love.graphics.rectangle("fill", math.floor(self.x), math.floor(self.y), self.w, self.h)
+        for i = BODY_LEN, 1, -1 do
+            local targetT = self.time - i * BODY_SPACING
+            local pt = self.trail[1]
+            for _, p in ipairs(self.trail) do
+                if p.t <= targetT then pt = p; break end
+            end
+            local fade = i / BODY_LEN
+            local size = (i <= 2) and 3 or (i <= 5) and 2 or 1
+            local g = 0.85 - fade * 0.4
+            love.graphics.setColor(0.15, g, 0.2, 1)
+            love.graphics.rectangle("fill", math.floor(pt.x - size / 2), math.floor(pt.y - size / 2), size, size)
+        end
+
+        -- head: 4x3 with eye pointing at aim
+        local hx = math.floor(self:centerX() - 2)
+        local hy = math.floor(self:centerY() - 1)
+        love.graphics.setColor(0.4, 1, 0.4, 1)
+        love.graphics.rectangle("fill", hx, hy, 4, 3)
+        love.graphics.setColor(0.25, 0.7, 0.25, 1)
+        love.graphics.rectangle("fill", hx, hy + 2, 4, 1)
         love.graphics.setColor(0, 0, 0, 1)
-        local ex = self.dir > 0 and (self.x + self.w - 3) or (self.x + 1)
-        love.graphics.rectangle("fill", math.floor(ex), math.floor(self.y + 2), 2, 2)
+        local ex = (self.dir > 0) and (hx + 3) or hx
+        love.graphics.rectangle("fill", ex, hy + 1, 1, 1)
     end
 
     local hb = self:hitbox()

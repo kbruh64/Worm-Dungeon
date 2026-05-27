@@ -11,9 +11,6 @@ local enemies, projectiles
 local input
 local banner, bannerTimer
 local clearTimer
-local inventoryOpen = false
-local invCursor = 1
-local invDragging = nil  -- weapon name being dragged from inventory
 
 local function spawnDungeon()
     local d = Progress.dungeon()
@@ -31,10 +28,17 @@ local function spawnDungeon()
 end
 
 function Game:enter()
-    worm = Worm.new(GAME_W / 2, GAME_H / 2)
+    local baseMax = 6 + Progress.maxHpBonus
+    if not worm or worm.hp <= 0 or Progress.currentDungeon == 1 then
+        worm = Worm.new(GAME_W / 2, GAME_H / 2)
+    end
+    worm.maxHp = baseMax
+    if Progress.consumeHealRequest() then worm.hp = worm.maxHp end
+    worm.hp = math.min(worm.hp, worm.maxHp)
+    if worm.hp < worm.maxHp then worm.hp = math.min(worm.maxHp, worm.hp + 1) end
+    worm.x, worm.y = GAME_W / 2, GAME_H / 2
     input = {}
-    inventoryOpen = false
-    invDragging = nil
+    clearTimer = nil
     FX.reset()
     spawnDungeon()
 end
@@ -60,12 +64,11 @@ end
 function Game:update(dt)
     if bannerTimer then bannerTimer = math.max(0, bannerTimer - dt); if bannerTimer == 0 then bannerTimer = nil end end
     FX.update(dt)
-    if inventoryOpen then return end
 
     readInput()
     local mgx, mgy = MouseGame()
     worm:aimAt(mgx, mgy)
-    worm:update(dt, input)
+    worm:update(dt, input, Progress.speedBonus)
 
     local hb = worm:hitbox()
     for _, e in ipairs(enemies) do
@@ -80,7 +83,7 @@ function Game:update(dt)
                 hit = rectsOverlap(hb, { x = e.x, y = e.y, w = e.w, h = e.h })
             end
             if hit then
-                local dmg = hb.damage + math.floor(worm.comboCount / 2)
+                local dmg = hb.damage + Progress.dmgBonus + math.floor(worm.comboCount / 2)
                 e:damage(dmg)
                 if e.dead and e.splits and e.w > 6 then
                     for _ = 1, 2 do
@@ -108,134 +111,54 @@ function Game:update(dt)
         end
     end
 
-    if worm.hp <= 0 then Progress.reset(); SM:switch("menu"); return end
+    if worm.hp <= 0 then Progress.reset(); worm = nil; SM:switch("menu"); return end
 
     if #enemies == 0 then
         clearTimer = (clearTimer or 0) + dt
-        if clearTimer > 1.2 then
+        if clearTimer > 1.0 then
             clearTimer = nil
-            local justUnlocked = (Progress.dungeon() or {}).unlock
-            local hasMore = Progress.advance()
-            if hasMore then
-                if justUnlocked then
-                    banner = "UNLOCKED: " .. string.upper(justUnlocked)
-                    bannerTimer = 2.2
-                end
-                spawnDungeon()
-                worm.hp = math.min(worm.maxHp, worm.hp + 2)
-            else
-                SM:switch("victory")
-            end
+            SM:switch("reward")
         end
-    end
-end
-
--- ---------- HUD / hotbar / inventory ----------
-
-local SLOT_SIZE = 18
-local HOTBAR_Y = GAME_H - SLOT_SIZE - 4
-
-local function hotbarOrigin()
-    local totalW = 9 * SLOT_SIZE
-    return math.floor((GAME_W - totalW) / 2), HOTBAR_Y
-end
-
-local function drawSlot(x, y, weapon, selected)
-    love.graphics.setColor(0, 0, 0, 0.7)
-    love.graphics.rectangle("fill", x, y, SLOT_SIZE, SLOT_SIZE)
-    love.graphics.setColor(selected and 1 or 0.4, selected and 1 or 0.4, selected and 1 or 0.4, 1)
-    love.graphics.rectangle("line", x + 0.5, y + 0.5, SLOT_SIZE - 1, SLOT_SIZE - 1)
-    if selected then
-        love.graphics.rectangle("line", x - 0.5, y - 0.5, SLOT_SIZE + 1, SLOT_SIZE + 1)
-    end
-    if weapon then
-        local def = Weapons.get(weapon)
-        if def then
-            love.graphics.setColor(def.color[1], def.color[2], def.color[3], 1)
-            love.graphics.setFont(Fonts.medium)
-            local g = def.glyph
-            love.graphics.print(g, x + math.floor((SLOT_SIZE - Fonts.medium:getWidth(g)) / 2),
-                                   y + math.floor((SLOT_SIZE - Fonts.medium:getHeight()) / 2) - 1)
-        end
-    end
-end
-
-local function drawHotbar()
-    local ox, oy = hotbarOrigin()
-    for i = 1, 9 do
-        drawSlot(ox + (i - 1) * SLOT_SIZE, oy, Progress.hotbar[i], i == Progress.activeSlot)
-        love.graphics.setColor(0.6, 0.6, 0.6, 1)
-        love.graphics.setFont(Fonts.small)
-        love.graphics.print(tostring(i), ox + (i - 1) * SLOT_SIZE + 1, oy + 1)
-    end
-    local active = Progress.activeWeapon()
-    if active then
-        love.graphics.setFont(Fonts.small)
-        love.graphics.setColor(1, 1, 1, 1)
-        love.graphics.printf(string.upper(active), 0, oy - 9, GAME_W, "center")
     end
 end
 
 local function drawHud()
-    love.graphics.setColor(0.2, 0.1, 0.1, 1)
-    love.graphics.rectangle("fill", 4, 4, 60, 5)
-    love.graphics.setColor(0.3, 1, 0.3, 1)
-    love.graphics.rectangle("fill", 4, 4, 60 * (worm.hp / worm.maxHp), 5)
-
+    -- hp pips
     love.graphics.setFont(Fonts.small)
     love.graphics.setColor(1, 1, 1, 1)
+    love.graphics.print("HP", 4, 4)
+    for i = 1, worm.maxHp do
+        local x = 18 + (i - 1) * 5
+        if i <= worm.hp then
+            love.graphics.setColor(0.3, 1, 0.3, 1)
+        else
+            love.graphics.setColor(1, 1, 1, 0.2)
+        end
+        love.graphics.rectangle("fill", x, 5, 3, 5)
+    end
+
+    love.graphics.setColor(1, 1, 1, 1)
     love.graphics.print(string.format("D%02d/%02d", Progress.currentDungeon, Progress.total()), GAME_W - 50, 4)
+
+    -- equipped weapon (lower-left, no hotbar)
+    local def = Weapons.get(Progress.equipped)
+    if def then
+        love.graphics.setColor(def.color[1], def.color[2], def.color[3], 1)
+        love.graphics.setFont(Fonts.medium)
+        love.graphics.print(def.glyph, 4, GAME_H - 18)
+        love.graphics.setFont(Fonts.small)
+        love.graphics.setColor(1, 1, 1, 1)
+        love.graphics.print(string.upper(Progress.equipped), 16, GAME_H - 12)
+        if #Progress.weapons > 1 then
+            love.graphics.setColor(1, 1, 1, 0.5)
+            love.graphics.print("Q swap", GAME_W - 38, GAME_H - 10)
+        end
+    end
 
     if worm.comboCount > 1 then
         love.graphics.setColor(1, 0.6, 0.3, math.min(1, worm.comboTimer * 2))
         love.graphics.setFont(Fonts.medium)
-        love.graphics.print("x" .. worm.comboCount, GAME_W - 30, 12)
-    end
-end
-
-local INV_COLS = 6
-local INV_ROWS = 4
-local function inventoryGrid()
-    local gw = INV_COLS * SLOT_SIZE
-    local gh = INV_ROWS * SLOT_SIZE
-    local ox = math.floor((GAME_W - gw) / 2)
-    local oy = math.floor((GAME_H - gh) / 2) - 8
-    return ox, oy, gw, gh
-end
-
-local function drawInventory()
-    love.graphics.setColor(0, 0, 0, 0.7)
-    love.graphics.rectangle("fill", 0, 0, GAME_W, GAME_H)
-
-    love.graphics.setFont(Fonts.medium)
-    love.graphics.setColor(1, 1, 1, 1)
-    love.graphics.printf("INVENTORY", 0, 20, GAME_W, "center")
-
-    local ox, oy = inventoryGrid()
-    for i = 1, INV_COLS * INV_ROWS do
-        local col = (i - 1) % INV_COLS
-        local row = math.floor((i - 1) / INV_COLS)
-        local x, y = ox + col * SLOT_SIZE, oy + row * SLOT_SIZE
-        local w = Progress.inventory[i]
-        drawSlot(x, y, w, false)
-    end
-
-    love.graphics.setFont(Fonts.small)
-    love.graphics.setColor(1, 1, 1, 0.8)
-    love.graphics.printf("click an inventory item, then a hotbar slot to assign", 0, oy + INV_ROWS * SLOT_SIZE + 6, GAME_W, "center")
-    love.graphics.printf("E or ESC to close", 0, GAME_H - 12, GAME_W, "center")
-
-    -- redraw hotbar so user can drop into it
-    drawHotbar()
-
-    if invDragging then
-        local mgx, mgy = MouseGame()
-        local def = Weapons.get(invDragging)
-        if def then
-            love.graphics.setColor(def.color[1], def.color[2], def.color[3], 1)
-            love.graphics.setFont(Fonts.medium)
-            love.graphics.print(def.glyph, mgx - 4, mgy - 6)
-        end
+        love.graphics.print("x" .. worm.comboCount, GAME_W - 30, 14)
     end
 end
 
@@ -249,11 +172,11 @@ function Game:draw()
     love.graphics.translate(math.floor(sx), math.floor(sy))
 
     love.graphics.setColor(p.accent[1] * 0.3, p.accent[2] * 0.3, p.accent[3] * 0.3, 0.5)
-    for x = 0, GAME_W, 16 do love.graphics.line(x, 20, x, GAME_H - SLOT_SIZE - 8) end
-    for y = 24, GAME_H - SLOT_SIZE - 8, 16 do love.graphics.line(0, y, GAME_W, y) end
+    for x = 0, GAME_W, 16 do love.graphics.line(x, 16, x, GAME_H - 4) end
+    for y = 20, GAME_H - 4, 16 do love.graphics.line(0, y, GAME_W, y) end
 
     love.graphics.setColor(p.accent[1], p.accent[2], p.accent[3], 1)
-    love.graphics.rectangle("line", 4, 20, GAME_W - 8, GAME_H - 24 - SLOT_SIZE - 4)
+    love.graphics.rectangle("line", 2, 14, GAME_W - 4, GAME_H - 18)
 
     for _, e in ipairs(enemies) do e:draw() end
     for _, pr in ipairs(projectiles) do
@@ -270,7 +193,6 @@ function Game:draw()
     love.graphics.pop()
 
     drawHud()
-    drawHotbar()
 
     -- crosshair
     local mgx, mgy = MouseGame()
@@ -286,81 +208,26 @@ function Game:draw()
         love.graphics.setColor(1, 1, 1, a)
         love.graphics.printf(banner, 0, GAME_H / 2 - 8, GAME_W, "center")
     end
-
-    if inventoryOpen then drawInventory() end
-end
-
--- ---------- input ----------
-
-local function hotbarSlotAt(gx, gy)
-    local ox, oy = hotbarOrigin()
-    if gy < oy or gy > oy + SLOT_SIZE then return nil end
-    if gx < ox or gx > ox + 9 * SLOT_SIZE then return nil end
-    return math.floor((gx - ox) / SLOT_SIZE) + 1
-end
-
-local function inventorySlotAt(gx, gy)
-    local ox, oy = inventoryGrid()
-    local col = math.floor((gx - ox) / SLOT_SIZE)
-    local row = math.floor((gy - oy) / SLOT_SIZE)
-    if col < 0 or col >= INV_COLS or row < 0 or row >= INV_ROWS then return nil end
-    return row * INV_COLS + col + 1
 end
 
 function Game:keypressed(key)
-    if key == "escape" then
-        if inventoryOpen then inventoryOpen = false; invDragging = nil
-        else SM:switch("menu") end
-        return
-    end
-    if key == "e" then
-        inventoryOpen = not inventoryOpen
-        invDragging = nil
-        return
-    end
-    if inventoryOpen then return end
-
+    if key == "escape" then Progress.reset(); worm = nil; SM:switch("menu"); return end
     if key == "space" then worm:dash(); return end
-
-    local n = tonumber(key)
-    if n and n >= 1 and n <= 9 then Progress.selectSlot(n) end
+    if key == "q" then Progress.cycleWeapon(1); return end
+    if key == "e" then Progress.cycleWeapon(-1); return end
 end
 
 function Game:mousepressed(gx, gy, button)
-    if inventoryOpen then
-        if button == 1 then
-            local invIdx = inventorySlotAt(gx, gy)
-            if invIdx and Progress.inventory[invIdx] then
-                invDragging = Progress.inventory[invIdx]
-                return
-            end
-            local hb = hotbarSlotAt(gx, gy)
-            if hb then
-                if invDragging then
-                    Progress.hotbar[hb] = invDragging
-                    invDragging = nil
-                else
-                    Progress.hotbar[hb] = nil
-                end
-            end
-        elseif button == 2 then
-            local hb = hotbarSlotAt(gx, gy)
-            if hb then Progress.hotbar[hb] = nil end
-            invDragging = nil
-        end
-        return
-    end
-
     if button == 1 then
-        local w = Progress.activeWeapon()
-        if w then worm:fireWeapon(w) end
+        worm:fireWeapon(Progress.equipped)
+    elseif button == 2 then
+        worm:dash()
     end
 end
 
 function Game:wheelmoved(dx, dy)
-    if inventoryOpen then return end
-    if dy > 0 then Progress.cycleSlot(-1)
-    elseif dy < 0 then Progress.cycleSlot(1) end
+    if dy > 0 then Progress.cycleWeapon(-1)
+    elseif dy < 0 then Progress.cycleWeapon(1) end
 end
 
 return Game

@@ -6,6 +6,7 @@ local StateMachine = require("src.state_machine")
 local Menu = require("src.states.menu")
 local Story = require("src.states.story")
 local Game = require("src.states.game")
+local Reward = require("src.states.reward")
 local Victory = require("src.states.victory")
 
 local canvas
@@ -19,7 +20,7 @@ function love.load()
     local path = "assets/fonts/Mojangles.ttf"
     local function tryFont(size)
         if love.filesystem.getInfo(path) then
-            return love.graphics.newFont(path, size)
+            return love.graphics.newFont(path, size, "mono")
         end
         return love.graphics.newFont(size)
     end
@@ -32,6 +33,7 @@ function love.load()
     sm:register("menu", Menu)
     sm:register("story", Story)
     sm:register("game", Game)
+    sm:register("reward", Reward)
     sm:register("victory", Victory)
     sm:switch("menu")
 
