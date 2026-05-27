@@ -1,12 +1,13 @@
 love.graphics.setDefaultFilter("nearest", "nearest", 0)
 
+GAME_W, GAME_H = 320, 180
+
 local StateMachine = require("src.state_machine")
 local Menu = require("src.states.menu")
 local Story = require("src.states.story")
 local Game = require("src.states.game")
 local Victory = require("src.states.victory")
 
-GAME_W, GAME_H = 320, 180
 local canvas
 
 local sm
