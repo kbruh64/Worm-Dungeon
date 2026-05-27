@@ -1,0 +1,15 @@
+{
+  "name": "worm-dungeon",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A green worm fights through a computer's defenses. LÖVE 2D game, browser build via love.js.",
+  "scripts": {
+    "pack": "node scripts/pack-love.js",
+    "build": "node scripts/build-web.js",
+    "clean": "node -e \"require('fs').rmSync('web-build',{recursive:true,force:true});require('fs').rmSync('dist',{recursive:true,force:true})\""
+  },
+  "devDependencies": {
+    "archiver": "^7.0.1",
+    "love.js": "^11.4.1"
+  }
+}
