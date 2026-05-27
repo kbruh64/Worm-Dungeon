@@ -1,4 +1,5 @@
 local Weapons = require("src.weapons")
+local FX = require("src.fx")
 
 local Worm = {}
 Worm.__index = Worm
@@ -64,12 +65,29 @@ function Worm:fireWeapon(name)
         self.comboCount = 1
     end
     self.comboTimer = COMBO_WINDOW
+
+    local cx, cy = self:centerX(), self:centerY()
+    local fx = cx + math.cos(self.aimAngle) * 8
+    local fy = cy + math.sin(self.aimAngle) * 8
+
+    if def.shape == "radial" then
+        FX.ring(cx, cy, def.color, 16, def.reach)
+        FX.shakeFor(0.18, 1.5)
+    elseif def.shape == "beam" then
+        FX.streak(cx, cy, math.cos(self.aimAngle) * 200, math.sin(self.aimAngle) * 200, def.color, 14)
+        FX.flashFor(0.06, def.color[1], def.color[2], def.color[3])
+        FX.shakeFor(0.12, 1)
+    else
+        FX.streak(fx, fy, math.cos(self.aimAngle) * 80, math.sin(self.aimAngle) * 80, def.color, 8)
+        FX.shakeFor(0.08, 1)
+    end
 end
 
 function Worm:dash()
     if self.dashTimer > 0 or self.attack then return end
     self.dashTimer = DASH_TIME
     self.invuln = math.max(self.invuln, DASH_TIME)
+    FX.dust(self:centerX(), self.y + self.h, {0.6, 1, 0.6}, 6)
 end
 
 function Worm:damage(n)
@@ -137,11 +155,47 @@ function Worm:draw()
     local hb = self:hitbox()
     if hb then
         local def = Weapons.get(self.attack)
-        love.graphics.setColor(def.color[1], def.color[2], def.color[3], 0.85)
+        local prog = 1 - (self.attackTimer / def.dur)
+        local alpha = math.sin(prog * math.pi) * 0.9 + 0.1
+        love.graphics.setColor(def.color[1], def.color[2], def.color[3], alpha)
         if hb.shape == "radial" then
-            love.graphics.circle("fill", hb.cx, hb.cy, hb.radius)
+            local r = hb.radius * (0.4 + prog * 0.6)
+            love.graphics.circle("line", hb.cx, hb.cy, r)
+            love.graphics.circle("line", hb.cx, hb.cy, r - 2)
+            love.graphics.setColor(1, 1, 1, alpha * 0.5)
+            love.graphics.circle("line", hb.cx, hb.cy, r - 4)
+        elseif hb.shape == "beam" then
+            local cx, cy = self:centerX(), self:centerY()
+            local ex = cx + math.cos(self.aimAngle) * def.reach
+            local ey = cy + math.sin(self.aimAngle) * def.reach
+            love.graphics.setLineWidth(3)
+            love.graphics.line(cx, cy, ex, ey)
+            love.graphics.setColor(1, 1, 1, alpha)
+            love.graphics.setLineWidth(1)
+            love.graphics.line(cx, cy, ex, ey)
         else
-            love.graphics.rectangle("fill", hb.x, hb.y, hb.w, hb.h)
+            -- angled slash arc along aim
+            local cx, cy = self:centerX(), self:centerY()
+            local ax = math.cos(self.aimAngle)
+            local ay = math.sin(self.aimAngle)
+            local px2 = -ay
+            local py2 = ax
+            local reach = def.reach
+            for i = 0, reach, 2 do
+                local t = i / reach
+                local off = math.sin(t * math.pi) * 6 * (1 - prog * 0.5)
+                local x = cx + ax * i + px2 * off
+                local y = cy + ay * i + py2 * off
+                love.graphics.rectangle("fill", math.floor(x), math.floor(y), 2, 2)
+            end
+            love.graphics.setColor(1, 1, 1, alpha * 0.7)
+            for i = 0, reach, 4 do
+                local t = i / reach
+                local off = math.sin(t * math.pi) * 6 * (1 - prog * 0.5)
+                local x = cx + ax * i + px2 * off
+                local y = cy + ay * i + py2 * off
+                love.graphics.rectangle("fill", math.floor(x), math.floor(y), 1, 1)
+            end
         end
     end
 end

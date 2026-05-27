@@ -2,6 +2,7 @@ local Worm = require("src.entities.worm")
 local Enemy = require("src.entities.enemy")
 local Progress = require("src.progress")
 local Weapons = require("src.weapons")
+local FX = require("src.fx")
 
 local Game = {}
 
@@ -34,6 +35,7 @@ function Game:enter()
     input = {}
     inventoryOpen = false
     invDragging = nil
+    FX.reset()
     spawnDungeon()
 end
 
@@ -57,6 +59,7 @@ end
 
 function Game:update(dt)
     if bannerTimer then bannerTimer = math.max(0, bannerTimer - dt); if bannerTimer == 0 then bannerTimer = nil end end
+    FX.update(dt)
     if inventoryOpen then return end
 
     readInput()
@@ -169,7 +172,7 @@ local function drawHotbar()
     if active then
         love.graphics.setFont(Fonts.small)
         love.graphics.setColor(1, 1, 1, 1)
-        love.graphics.printf(string.upper(active), 0, oy - 10, GAME_W, "center")
+        love.graphics.printf(string.upper(active), 0, oy - 9, GAME_W, "center")
     end
 end
 
@@ -180,7 +183,7 @@ local function drawHud()
     love.graphics.rectangle("fill", 4, 4, 60 * (worm.hp / worm.maxHp), 5)
 
     love.graphics.setFont(Fonts.small)
-    love.graphics.setColor(0.6, 0.8, 0.6, 1)
+    love.graphics.setColor(1, 1, 1, 1)
     love.graphics.print(string.format("D%02d/%02d", Progress.currentDungeon, Progress.total()), GAME_W - 50, 4)
 
     if worm.comboCount > 1 then
@@ -205,7 +208,7 @@ local function drawInventory()
     love.graphics.rectangle("fill", 0, 0, GAME_W, GAME_H)
 
     love.graphics.setFont(Fonts.medium)
-    love.graphics.setColor(0.7, 1, 0.7, 1)
+    love.graphics.setColor(1, 1, 1, 1)
     love.graphics.printf("INVENTORY", 0, 20, GAME_W, "center")
 
     local ox, oy = inventoryGrid()
@@ -218,7 +221,7 @@ local function drawInventory()
     end
 
     love.graphics.setFont(Fonts.small)
-    love.graphics.setColor(0.5, 0.7, 0.5, 1)
+    love.graphics.setColor(1, 1, 1, 0.8)
     love.graphics.printf("click an inventory item, then a hotbar slot to assign", 0, oy + INV_ROWS * SLOT_SIZE + 6, GAME_W, "center")
     love.graphics.printf("E or ESC to close", 0, GAME_H - 12, GAME_W, "center")
 
@@ -241,6 +244,10 @@ function Game:draw()
     local p = d.palette
     love.graphics.clear(p.bg[1], p.bg[2], p.bg[3], 1)
 
+    local sx, sy = FX.shakeOffset()
+    love.graphics.push()
+    love.graphics.translate(math.floor(sx), math.floor(sy))
+
     love.graphics.setColor(p.accent[1] * 0.3, p.accent[2] * 0.3, p.accent[3] * 0.3, 0.5)
     for x = 0, GAME_W, 16 do love.graphics.line(x, 20, x, GAME_H - SLOT_SIZE - 8) end
     for y = 24, GAME_H - SLOT_SIZE - 8, 16 do love.graphics.line(0, y, GAME_W, y) end
@@ -250,10 +257,17 @@ function Game:draw()
 
     for _, e in ipairs(enemies) do e:draw() end
     for _, pr in ipairs(projectiles) do
-        love.graphics.setColor(1, 0.5, 1, 1)
-        love.graphics.rectangle("fill", pr.x - 2, pr.y - 2, 4, 4)
+        local c = pr.color or {1, 0.5, 1}
+        love.graphics.setColor(c[1], c[2], c[3], 1)
+        love.graphics.rectangle("fill", math.floor(pr.x) - 2, math.floor(pr.y) - 2, 4, 4)
+        love.graphics.setColor(1, 1, 1, 1)
+        love.graphics.rectangle("fill", math.floor(pr.x) - 1, math.floor(pr.y) - 1, 2, 2)
     end
     worm:draw()
+    FX.draw()
+    FX.drawOverlay()
+
+    love.graphics.pop()
 
     drawHud()
     drawHotbar()
@@ -269,7 +283,7 @@ function Game:draw()
         local a = math.min(1, bannerTimer)
         love.graphics.setColor(0, 0, 0, 0.6 * a)
         love.graphics.rectangle("fill", 0, GAME_H / 2 - 12, GAME_W, 24)
-        love.graphics.setColor(0.7, 1, 0.7, a)
+        love.graphics.setColor(1, 1, 1, a)
         love.graphics.printf(banner, 0, GAME_H / 2 - 8, GAME_W, "center")
     end
 

@@ -38,12 +38,12 @@ end
 
 function Story:draw()
     love.graphics.setFont(Fonts.medium)
-    love.graphics.setColor(0.6, 1, 0.6, 1)
+    love.graphics.setColor(1, 1, 1, 1)
     local text = pages[page]:sub(1, math.floor(revealed))
     love.graphics.printf(text, 20, 60, GAME_W - 40, "center")
 
     love.graphics.setFont(Fonts.small)
-    love.graphics.setColor(0.3, 0.5, 0.3, 0.5 + 0.5 * math.sin(timer * 3))
+    love.graphics.setColor(1, 1, 1, 0.4 + 0.4 * math.sin(timer * 3))
     love.graphics.printf("[ENTER]", 0, GAME_H - 20, GAME_W, "center")
 end
 
