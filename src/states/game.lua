@@ -13,6 +13,17 @@ local room
 local input
 local banner, bannerTimer
 local clearTimer
+local camX, camY = 0, 0
+local LIGHT_RADIUS = 56
+
+local function updateCamera()
+    if not worm or not room then return end
+    local tx = worm:centerX() - GAME_W / 2
+    local ty = worm:centerY() - GAME_H / 2
+    tx = math.max(0, math.min(room.ROOM_W - GAME_W, tx))
+    ty = math.max(0, math.min(room.ROOM_H - GAME_H, ty))
+    camX, camY = math.floor(tx), math.floor(ty)
+end
 
 local function fits(x, y, w, h)
     if not room then return true end
@@ -51,17 +62,20 @@ end
 function Game:enter()
     local baseMax = 6 + Progress.maxHpBonus
     if not worm or worm.hp <= 0 or Progress.currentDungeon == 1 then
-        worm = Worm.new(GAME_W / 2, GAME_H / 2)
+        worm = Worm.new(0, 0)
     end
     worm.maxHp = baseMax
     if Progress.consumeHealRequest() then worm.hp = worm.maxHp end
     worm.hp = math.min(worm.hp, worm.maxHp)
     if worm.hp < worm.maxHp then worm.hp = math.min(worm.maxHp, worm.hp + 1) end
-    worm.x, worm.y = GAME_W / 2, GAME_H / 2
     input = {}
     clearTimer = nil
     FX.reset()
     spawnDungeon()
+    local sx, sy = room:spawnPoint()
+    worm.x, worm.y = sx - worm.w / 2, sy - worm.h / 2
+    for i = 1, #worm.trail do worm.trail[i] = { x = sx, y = sy, t = 0 } end
+    updateCamera()
 end
 
 local function readInput()
@@ -89,10 +103,11 @@ function Game:update(dt)
 
     readInput()
     local mgx, mgy = MouseGame()
-    worm:aimAt(mgx, mgy)
+    worm:aimAt(mgx + camX, mgy + camY)
     local prevX, prevY = worm.x, worm.y
     worm:update(dt, input, Progress.speedBonus)
     worm.x, worm.y = room:resolveCollision(worm.x, worm.y, worm.w, worm.h, prevX, prevY)
+    updateCamera()
 
     local hb = worm:hitbox()
     for _, e in ipairs(enemies) do
@@ -191,13 +206,11 @@ local function drawHud()
 end
 
 function Game:draw()
-    local d = Progress.dungeon()
-    local p = d.palette
-    love.graphics.clear(p.bg[1] * 0.5, p.bg[2] * 0.5, p.bg[3] * 0.5, 1)
+    love.graphics.clear(0, 0, 0, 1)
 
-    local sx, sy = FX.shakeOffset()
+    local sxk, syk = FX.shakeOffset()
     love.graphics.push()
-    love.graphics.translate(math.floor(sx), math.floor(sy))
+    love.graphics.translate(math.floor(-camX + sxk), math.floor(-camY + syk))
 
     room:drawFloor()
     room:drawFrame()
@@ -214,17 +227,34 @@ function Game:draw()
     end
     worm:draw()
     FX.draw()
-    FX.drawOverlay()
 
     love.graphics.pop()
 
-    drawHud()
+    -- darkness: stencil a circular vision hole around the worm in screen space
+    local pcx = math.floor(worm:centerX() - camX + sxk)
+    local pcy = math.floor(worm:centerY() - camY + syk)
+    love.graphics.stencil(function()
+        love.graphics.circle("fill", pcx, pcy, LIGHT_RADIUS)
+    end, "replace", 1)
+    love.graphics.setStencilTest("notequal", 1)
+    love.graphics.setColor(0, 0, 0, 1)
+    love.graphics.rectangle("fill", 0, 0, GAME_W, GAME_H)
+    love.graphics.setStencilTest()
+    -- soft edge: thin dark ring just inside the vision boundary
+    for i = 0, 5 do
+        love.graphics.setColor(0, 0, 0, 0.12)
+        love.graphics.circle("line", pcx, pcy, LIGHT_RADIUS - i)
+    end
 
-    -- crosshair
+    FX.drawOverlay()
+
+    -- crosshair in screen-space (over the darkness so it's always visible)
     local mgx, mgy = MouseGame()
-    love.graphics.setColor(1, 1, 1, 0.8)
+    love.graphics.setColor(1, 1, 1, 0.9)
     love.graphics.rectangle("fill", math.floor(mgx) - 2, math.floor(mgy), 5, 1)
     love.graphics.rectangle("fill", math.floor(mgx), math.floor(mgy) - 2, 1, 5)
+
+    drawHud()
 
     if bannerTimer then
         love.graphics.setFont(Fonts.medium)

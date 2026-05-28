@@ -135,8 +135,6 @@ function Worm:update(dt, input, speedBonus)
 
     self.x = self.x + mx * speed * dt
     self.y = self.y + my * speed * dt
-    self.x = math.max(4, math.min(GAME_W - 4 - self.w, self.x))
-    self.y = math.max(22, math.min(GAME_H - 6 - self.h, self.y))
 
     table.insert(self.trail, 1, { x = self:centerX(), y = self:centerY(), t = self.time })
     while #self.trail > 64 do table.remove(self.trail) end

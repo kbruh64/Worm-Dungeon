@@ -2,19 +2,18 @@
 -- floor patterns, solid obstacles (server racks, capacitors, vents), and an
 -- exit terminal that activates once enemies are cleared.
 local TILE = 8
+local ROOM_W, ROOM_H = 480, 320
+local PLAY_X1, PLAY_Y1 = 8, 8
+local PLAY_X2, PLAY_Y2 = ROOM_W - 8, ROOM_H - 8
+
 local Room = {}
 Room.__index = Room
 
--- playable bounds (inside the room frame). Top HUD: y=0..12, bottom HUD: y=GAME_H-12..GAME_H.
-local PLAY_X1, PLAY_Y1 = 8, 14
-local PLAY_X2, PLAY_Y2 = nil, nil
-
-local function ensureBounds()
-    PLAY_X2 = GAME_W - 8
-    PLAY_Y2 = GAME_H - 14
-end
-
 Room.TILE = TILE
+Room.ROOM_W = ROOM_W
+Room.ROOM_H = ROOM_H
+
+local function ensureBounds() end
 
 local function chooseFloorPattern(seed)
     -- Deterministic pattern per room seed. Pattern is a function (col, row) -> floor variant index.
@@ -45,11 +44,10 @@ local function generateObstacles(palette, seed)
     local function fits(x, y, w, h)
         if x < PLAY_X1 + 16 or x + w > PLAY_X2 - 16 then return false end
         if y < PLAY_Y1 + 12 or y + h > PLAY_Y2 - 12 then return false end
-        -- keep spawn (center) and exit (right-mid) clear
-        local cx, cy = GAME_W / 2, GAME_H / 2
-        if math.abs((x + w/2) - cx) < 24 and math.abs((y + h/2) - cy) < 24 then return false end
-        local ex, ey = PLAY_X2 - 12, GAME_H / 2
-        if math.abs((x + w/2) - ex) < 16 and math.abs((y + h/2) - ey) < 16 then return false end
+        local cx, cy = ROOM_W / 2, ROOM_H / 2
+        if math.abs((x + w/2) - cx) < 28 and math.abs((y + h/2) - cy) < 28 then return false end
+        local ex, ey = PLAY_X2 - 12, ROOM_H / 2
+        if math.abs((x + w/2) - ex) < 20 and math.abs((y + h/2) - ey) < 20 then return false end
         for _, o in ipairs(obstacles) do
             if not (x + w + 4 < o.x or o.x + o.w + 4 < x or y + h + 4 < o.y or o.y + o.h + 4 < y) then
                 return false
@@ -58,8 +56,9 @@ local function generateObstacles(palette, seed)
         return true
     end
 
+    count = count + 6 -- denser obstacles in the larger room
     local tries = 0
-    while #obstacles < count and tries < 60 do
+    while #obstacles < count and tries < 200 do
         tries = tries + 1
         local kind = kinds[math.random(1, #kinds)]
         local w, h
@@ -117,8 +116,12 @@ end
 
 function Room:exitRect()
     local ex = PLAY_X2 - 10
-    local ey = math.floor(GAME_H / 2) - 6
+    local ey = math.floor(ROOM_H / 2) - 6
     return ex, ey, 8, 12
+end
+
+function Room:spawnPoint()
+    return ROOM_W / 2, ROOM_H / 2
 end
 
 function Room:exitHit(px, py, pw, ph)
@@ -131,73 +134,47 @@ local function px(x, y, w, h)
     love.graphics.rectangle("fill", math.floor(x), math.floor(y), w or 1, h or 1)
 end
 
-local function drawFloorTile(self, c, r, variant)
-    local x = PLAY_X1 + c * TILE
-    local y = PLAY_Y1 + r * TILE
-    local p = self.palette
-    -- base
-    love.graphics.setColor(p.bg[1] * 1.4, p.bg[2] * 1.4, p.bg[3] * 1.4, 1)
-    px(x, y, TILE, TILE)
-    -- variants
-    if variant == 1 then
-        love.graphics.setColor(p.accent[1] * 0.25, p.accent[2] * 0.25, p.accent[3] * 0.25, 1)
-        px(x, y + TILE - 1, TILE, 1)
-        px(x, y, 1, TILE)
-    elseif variant == 2 then
-        love.graphics.setColor(p.accent[1] * 0.4, p.accent[2] * 0.4, p.accent[3] * 0.4, 1)
-        px(x + 3, y + 3, 2, 2)
-    elseif variant == 3 then
-        -- horizontal trace line
-        love.graphics.setColor(p.accent[1] * 0.5, p.accent[2] * 0.5, p.accent[3] * 0.5, 1)
-        px(x, y + 3, TILE, 1)
-        px(x, y + 4, TILE, 1)
-    elseif variant == 4 then
-        -- vertical bus line with solder pads
-        love.graphics.setColor(p.accent[1] * 0.5, p.accent[2] * 0.5, p.accent[3] * 0.5, 1)
-        px(x + 3, y, 1, TILE)
-        px(x + 4, y, 1, TILE)
-        love.graphics.setColor(p.accent[1], p.accent[2], p.accent[3], 0.6)
-        px(x + 2, y + 3, 3, 1)
-    elseif variant == 5 then
-        -- data node blink
-        local blink = math.floor(self.time * 2 + c + r) % 4 == 0
-        love.graphics.setColor(p.accent[1] * 0.4, p.accent[2] * 0.4, p.accent[3] * 0.4, 1)
-        px(x + 3, y + 3, 2, 2)
-        if blink then
-            love.graphics.setColor(0.6, 1, 0.8, 1)
-            px(x + 3, y + 3, 2, 2)
-        end
-    end
-end
-
+-- Sparse circuit details scattered on a black floor — only meaningful when lit.
 function Room:drawFloor()
+    local p = self.palette
     local cols = math.floor((PLAY_X2 - PLAY_X1) / TILE)
     local rows = math.floor((PLAY_Y2 - PLAY_Y1) / TILE)
     for r = 0, rows - 1 do
         for c = 0, cols - 1 do
-            drawFloorTile(self, c, r, self.floorPattern(c, r))
+            local variant = self.floorPattern(c, r)
+            local x = PLAY_X1 + c * TILE
+            local y = PLAY_Y1 + r * TILE
+            if variant == 2 then
+                love.graphics.setColor(p.accent[1] * 0.35, p.accent[2] * 0.35, p.accent[3] * 0.35, 1)
+                px(x + 3, y + 3, 2, 2)
+            elseif variant == 3 then
+                love.graphics.setColor(p.accent[1] * 0.4, p.accent[2] * 0.4, p.accent[3] * 0.4, 1)
+                px(x, y + 3, TILE, 1)
+            elseif variant == 4 then
+                love.graphics.setColor(p.accent[1] * 0.4, p.accent[2] * 0.4, p.accent[3] * 0.4, 1)
+                px(x + 3, y, 1, TILE)
+                love.graphics.setColor(p.accent[1] * 0.7, p.accent[2] * 0.7, p.accent[3] * 0.7, 1)
+                px(x + 2, y + 3, 3, 1)
+            elseif variant == 5 then
+                local blink = math.floor(self.time * 2 + c + r) % 4 == 0
+                love.graphics.setColor(p.accent[1] * 0.4, p.accent[2] * 0.4, p.accent[3] * 0.4, 1)
+                px(x + 3, y + 3, 2, 2)
+                if blink then
+                    love.graphics.setColor(0.6, 1, 0.8, 1)
+                    px(x + 3, y + 3, 2, 2)
+                end
+            end
         end
     end
 end
 
 function Room:drawFrame()
     local p = self.palette
-    -- chip-edge frame
-    love.graphics.setColor(p.accent[1] * 0.7, p.accent[2] * 0.7, p.accent[3] * 0.7, 1)
+    love.graphics.setColor(p.accent[1] * 0.6, p.accent[2] * 0.6, p.accent[3] * 0.6, 1)
     px(PLAY_X1 - 2, PLAY_Y1 - 2, PLAY_X2 - PLAY_X1 + 4, 2)
     px(PLAY_X1 - 2, PLAY_Y2, PLAY_X2 - PLAY_X1 + 4, 2)
     px(PLAY_X1 - 2, PLAY_Y1 - 2, 2, PLAY_Y2 - PLAY_Y1 + 4)
     px(PLAY_X2, PLAY_Y1 - 2, 2, PLAY_Y2 - PLAY_Y1 + 4)
-    -- chip pins along edges
-    love.graphics.setColor(0.7, 0.7, 0.7, 1)
-    for c = 0, math.floor((PLAY_X2 - PLAY_X1) / 8) do
-        px(PLAY_X1 + c * 8 + 1, PLAY_Y1 - 4, 2, 2)
-        px(PLAY_X1 + c * 8 + 1, PLAY_Y2 + 2, 2, 2)
-    end
-    for r = 0, math.floor((PLAY_Y2 - PLAY_Y1) / 8) do
-        px(PLAY_X1 - 4, PLAY_Y1 + r * 8 + 1, 2, 2)
-        px(PLAY_X2 + 2, PLAY_Y1 + r * 8 + 1, 2, 2)
-    end
 end
 
 local obstacleDraw = {}
