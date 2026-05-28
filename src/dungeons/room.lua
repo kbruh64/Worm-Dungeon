@@ -139,6 +139,14 @@ function Room:drawFloor()
     local p = self.palette
     local cols = math.floor((PLAY_X2 - PLAY_X1) / TILE)
     local rows = math.floor((PLAY_Y2 - PLAY_Y1) / TILE)
+    -- faint dot at every tile corner: provides a constant motion reference
+    -- as the camera scrolls past while you move.
+    love.graphics.setColor(p.accent[1] * 0.18, p.accent[2] * 0.18, p.accent[3] * 0.18, 1)
+    for r = 0, rows do
+        for c = 0, cols do
+            px(PLAY_X1 + c * TILE, PLAY_Y1 + r * TILE, 1, 1)
+        end
+    end
     for r = 0, rows - 1 do
         for c = 0, cols - 1 do
             local variant = self.floorPattern(c, r)

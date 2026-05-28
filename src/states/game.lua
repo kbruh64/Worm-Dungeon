@@ -14,7 +14,7 @@ local input
 local banner, bannerTimer
 local clearTimer
 local camX, camY = 0, 0
-local LIGHT_RADIUS = 56
+local LIGHT_RADIUS = 66
 
 local function updateCamera()
     if not worm or not room then return end
@@ -35,26 +35,43 @@ local function fits(x, y, w, h)
     return true
 end
 
-local function spawnDungeon()
+local currentWave, totalWaves, waveDelay
+
+local function spawnWave()
     local d = Progress.dungeon()
-    room = Room.new(d, Progress.currentDungeon * 1009 + 17)
-    enemies, projectiles = {}, {}
     local x1, y1, x2, y2 = room:bounds()
-    for _ = 1, d.enemyCount do
-        local arch = d.archetype
-        if d.boss and Progress.isFinal() then arch = "root"
-        elseif d.boss then arch = "kernel" end
-        local hp = d.enemyHp
-        -- place in a free tile
-        local tries = 0
-        local ex, ey
+    local arch = d.archetype
+    if d.boss and Progress.isFinal() then arch = "root"
+    elseif d.boss then arch = "kernel" end
+
+    -- enemies per wave: split the dungeon total across waves, ramping up slightly
+    local perWave = math.max(1, math.ceil(d.enemyCount / totalWaves))
+    if d.boss then perWave = (currentWave == totalWaves) and 1 or perWave end
+
+    for _ = 1, perWave do
+        local tries, ex, ey = 0, nil, nil
         repeat
             tries = tries + 1
             ex = x1 + 16 + math.random(0, math.floor((x2 - x1 - 48) / 8)) * 8
             ey = y1 + 12 + math.random(0, math.floor((y2 - y1 - 36) / 8)) * 8
-        until fits(ex, ey, 18, 18) or tries > 30
-        table.insert(enemies, Enemy.new(ex, ey, arch, hp))
+        until (fits(ex, ey, 18, 18) and (not worm or math.abs(ex - worm.x) > 40 or math.abs(ey - worm.y) > 40)) or tries > 40
+        table.insert(enemies, Enemy.new(ex, ey, arch, d.enemyHp))
+        FX.spark(ex + 9, ey + 9, d.palette.accent, 8, 80, 0.4)
     end
+end
+
+local function spawnDungeon()
+    local d = Progress.dungeon()
+    room = Room.new(d, Progress.currentDungeon * 1009 + 17)
+    enemies, projectiles = {}, {}
+    if d.boss then
+        totalWaves = 1
+    else
+        totalWaves = 2 + math.floor(Progress.currentDungeon / 8) -- 2..5 waves
+    end
+    currentWave = 1
+    waveDelay = nil
+    spawnWave()
     banner = d.name
     bannerTimer = 2.0
 end
@@ -114,8 +131,11 @@ function Game:update(dt)
         local epx, epy = e.x, e.y
         e:update(dt, worm,
             function(ne) table.insert(enemies, ne) end,
-            function(p) table.insert(projectiles, p) end)
-        e.x, e.y = room:resolveCollision(e.x, e.y, e.w, e.h, epx, epy)
+            function(p) table.insert(projectiles, p) end,
+            enemies)
+        if e.jumpState ~= "air" then
+            e.x, e.y = room:resolveCollision(e.x, e.y, e.w, e.h, epx, epy)
+        end
         if hb and not e.dead then
             local hit
             if hb.shape == "radial" then
@@ -154,11 +174,28 @@ function Game:update(dt)
 
     if worm.hp <= 0 then Progress.reset(); worm = nil; SM:switch("menu"); return end
 
+    -- wave progression
     if #enemies == 0 and not room.exitOpen then
-        room.exitOpen = true
-        banner = "ROOM CLEARED - HEAD TO EXIT"
-        bannerTimer = 1.6
-        FX.flashFor(0.15, 0.4, 1, 0.6)
+        if currentWave < totalWaves then
+            if not waveDelay then
+                waveDelay = 1.2
+            else
+                waveDelay = waveDelay - dt
+                if waveDelay <= 0 then
+                    currentWave = currentWave + 1
+                    waveDelay = nil
+                    spawnWave()
+                    banner = "WAVE " .. currentWave .. " / " .. totalWaves
+                    bannerTimer = 1.4
+                    FX.shakeFor(0.2, 1.5)
+                end
+            end
+        else
+            room.exitOpen = true
+            banner = "CLEARED - HEAD TO EXIT"
+            bannerTimer = 1.6
+            FX.flashFor(0.15, 0.4, 1, 0.6)
+        end
     end
     if room.exitOpen and room:exitHit(worm.x, worm.y, worm.w, worm.h) then
         SM:switch("reward")
@@ -182,6 +219,10 @@ local function drawHud()
 
     love.graphics.setColor(1, 1, 1, 1)
     love.graphics.print(string.format("D%02d/%02d", Progress.currentDungeon, Progress.total()), GAME_W - 50, 4)
+    if not room.exitOpen and totalWaves > 1 then
+        love.graphics.setColor(1, 1, 1, 0.7)
+        love.graphics.print(string.format("WAVE %d/%d", currentWave, totalWaves), GAME_W - 62, 12)
+    end
 
     -- equipped weapon (lower-left, no hotbar)
     local def = Weapons.get(Progress.equipped)

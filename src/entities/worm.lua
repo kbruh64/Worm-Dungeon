@@ -4,7 +4,7 @@ local FX = require("src.fx")
 local Worm = {}
 Worm.__index = Worm
 
-local SPEED = 70
+local SPEED = 88
 local DASH_SPEED = 220
 local DASH_TIME = 0.18
 local INVULN_TIME = 0.5

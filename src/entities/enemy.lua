@@ -3,72 +3,247 @@ local FX = require("src.fx")
 local Enemy = {}
 Enemy.__index = Enemy
 
+-- hpMul scales the dungeon's base HP; ability marks special behavior.
 local archetypes = {
-    bit      = { w = 8,  h = 8,  speed = 30, hp = 1, color = {1, 0.4, 0.4}, contact = 1 },
-    byte     = { w = 12, h = 12, speed = 40, hp = 2, color = {1, 0.6, 0.3}, contact = 1 },
-    packet   = { w = 12, h = 8,  speed = 80, hp = 1, color = {0.5, 0.9, 1}, contact = 1 },
-    daemon   = { w = 14, h = 14, speed = 20, hp = 2, color = {0.8, 0.4, 1}, contact = 1, ranged = true },
-    firewall = { w = 18, h = 18, speed = 25, hp = 5, color = {1, 0.5, 0.2}, contact = 2 },
-    virus    = { w = 12, h = 12, speed = 50, hp = 2, color = {0.4, 1, 0.6}, contact = 1, splits = true },
-    kernel   = { w = 20, h = 20, speed = 35, hp = 6, color = {1, 0.9, 0.5}, contact = 2 },
-    root     = { w = 32, h = 28, speed = 45, hp = 10, color = {1, 0.3, 0.6}, contact = 2 },
+    bit      = { w = 8,  h = 8,  speed = 32, hpMul = 1.5, color = {1, 0.4, 0.4}, contact = 1 },
+    byte     = { w = 12, h = 12, speed = 42, hpMul = 2.5, color = {1, 0.6, 0.3}, contact = 1, ability = "dash" },
+    packet   = { w = 12, h = 8,  speed = 70, hpMul = 2,   color = {0.5, 0.9, 1}, contact = 1, ability = "dash" },
+    daemon   = { w = 14, h = 14, speed = 22, hpMul = 2.5, color = {0.8, 0.4, 1}, contact = 1, ranged = true, ability = "burst" },
+    firewall = { w = 18, h = 18, speed = 26, hpMul = 4,   color = {1, 0.5, 0.2}, contact = 2, ability = "shield" },
+    virus    = { w = 12, h = 12, speed = 48, hpMul = 3,   color = {0.4, 1, 0.6}, contact = 1, splits = true, ability = "heal" },
+    kernel   = { w = 20, h = 20, speed = 34, hpMul = 4.5, color = {1, 0.9, 0.5}, contact = 2, ability = "jump" },
+    root     = { w = 32, h = 28, speed = 46, hpMul = 6,   color = {1, 0.3, 0.6}, contact = 3, ability = "boss" },
 }
 
 function Enemy.new(x, y, arch, hpScale)
     local a = archetypes[arch] or archetypes.bit
+    local hp = math.ceil((hpScale or 2) * (a.hpMul or 1))
     return setmetatable({
         x = x, y = y, w = a.w, h = a.h,
-        speed = a.speed, hp = hpScale or a.hp, maxHp = hpScale or a.hp,
+        speed = a.speed, hp = hp, maxHp = hp,
         color = a.color, contact = a.contact,
         arch = arch, ranged = a.ranged, splits = a.splits,
+        ability = a.ability,
         hitFlash = 0, dead = false,
         fireTimer = math.random() * 2,
         bobT = math.random() * 6.28,
         spinT = 0,
+        -- ability state
+        abilityCd = 1.5 + math.random() * 2,
+        shieldTimer = 0,
+        dashTimer = 0, dvx = 0, dvy = 0,
+        jumpState = nil, jumpTimer = 0, jx = 0, jy = 0,
+        healGlow = 0,
+        sinceHit = 99,
     }, Enemy)
 end
 
 function Enemy:rect() return self.x, self.y, self.w, self.h end
 
+local function cx(self) return self.x + self.w / 2 end
+local function cy(self) return self.y + self.h / 2 end
+
 function Enemy:damage(n)
+    self.sinceHit = 0
+    if self.shieldTimer > 0 then
+        -- shield absorbs: chip it instead of taking full damage
+        self.hitFlash = 0.12
+        FX.spark(cx(self), cy(self), {0.5, 0.8, 1}, 5, 50, 0.25)
+        self.shieldTimer = self.shieldTimer - 0.4
+        return
+    end
     self.hp = self.hp - n
     self.hitFlash = 0.12
-    FX.spark(self.x + self.w / 2, self.y + self.h / 2, self.color, 6, 60, 0.3)
-    FX.spark(self.x + self.w / 2, self.y + self.h / 2, {1, 1, 1}, 3, 100, 0.2)
+    FX.spark(cx(self), cy(self), self.color, 6, 60, 0.3)
+    FX.spark(cx(self), cy(self), {1, 1, 1}, 3, 100, 0.2)
     if self.hp <= 0 then
         self.dead = true
-        FX.spark(self.x + self.w / 2, self.y + self.h / 2, self.color, 16, 120, 0.5)
-        FX.spark(self.x + self.w / 2, self.y + self.h / 2, {1, 1, 1}, 6, 140, 0.3)
+        FX.spark(cx(self), cy(self), self.color, 16, 120, 0.5)
+        FX.spark(cx(self), cy(self), {1, 1, 1}, 6, 140, 0.3)
         FX.shakeFor(0.18, 1.5)
     end
 end
 
-function Enemy:update(dt, worm, addEnemy, addProjectile)
+-- ability handlers return true if they took over movement this frame
+local function abilityDash(self, dt, worm, dx, dy, d)
+    if self.dashTimer > 0 then
+        self.dashTimer = self.dashTimer - dt
+        self.x = self.x + self.dvx * dt
+        self.y = self.y + self.dvy * dt
+        FX.streak(cx(self), cy(self), -self.dvx * 0.1, -self.dvy * 0.1, self.color, 2)
+        return true
+    end
+    if self.abilityCd <= 0 and d < 90 and d > 0.1 then
+        self.dashTimer = 0.35
+        self.dvx = (dx / d) * self.speed * 4
+        self.dvy = (dy / d) * self.speed * 4
+        self.abilityCd = 2.5 + math.random() * 1.5
+        FX.spark(cx(self), cy(self), self.color, 6, 70, 0.3)
+        return true
+    end
+    return false
+end
+
+local function abilityShield(self)
+    if self.abilityCd <= 0 and self.shieldTimer <= 0 then
+        self.shieldTimer = 3.0
+        self.abilityCd = 6.0
+        FX.ring(cx(self), cy(self), {0.5, 0.8, 1}, 12, 12)
+    end
+end
+
+local function abilityHeal(self, dt, enemies)
+    if self.abilityCd <= 0 then
+        self.abilityCd = 5.0
+        self.healGlow = 0.8
+        -- heal self and nearby allies
+        local function heal(e)
+            if not e.dead and e.hp < e.maxHp then
+                e.hp = math.min(e.maxHp, e.hp + math.ceil(e.maxHp * 0.25))
+                FX.spark(e.x + e.w / 2, e.y + e.h / 2, {0.4, 1, 0.5}, 6, 50, 0.4)
+            end
+        end
+        heal(self)
+        if enemies then
+            for _, e in ipairs(enemies) do
+                if e ~= self then
+                    local ddx, ddy = e.x - self.x, e.y - self.y
+                    if ddx * ddx + ddy * ddy < 60 * 60 then heal(e) end
+                end
+            end
+        end
+    end
+    if self.healGlow > 0 then self.healGlow = self.healGlow - dt end
+end
+
+local function abilityJump(self, dt, worm, d)
+    if self.jumpState == "telegraph" then
+        self.jumpTimer = self.jumpTimer - dt
+        if self.jumpTimer <= 0 then
+            self.jumpState = "air"
+            self.jumpTimer = 0.4
+            self.jx, self.jy = worm.x, worm.y -- leap target
+        end
+        return true
+    elseif self.jumpState == "air" then
+        self.jumpTimer = self.jumpTimer - dt
+        local tx, ty = self.jx - self.x, self.jy - self.y
+        self.x = self.x + tx * dt * 6
+        self.y = self.y + ty * dt * 6
+        if self.jumpTimer <= 0 then
+            self.jumpState = nil
+            FX.ring(cx(self), cy(self), self.color, 16, 18)
+            FX.shakeFor(0.25, 2.5)
+            -- slam shockwave: hurt worm if close on landing
+            local wdx, wdy = worm:centerX() - cx(self), worm:centerY() - cy(self)
+            if wdx * wdx + wdy * wdy < 26 * 26 then worm:damage(self.contact + 1) end
+        end
+        return true
+    end
+    if self.abilityCd <= 0 and d < 120 then
+        self.jumpState = "telegraph"
+        self.jumpTimer = 0.5
+        self.abilityCd = 4.0
+        return true
+    end
+    return false
+end
+
+local function abilityBlink(self, dt, worm, d)
+    if self.abilityCd <= 0 and d < 50 then
+        -- teleport away from worm
+        local a = math.random() * math.pi * 2
+        FX.ring(cx(self), cy(self), self.color, 10, 10)
+        self.x = self.x + math.cos(a) * 70
+        self.y = self.y + math.sin(a) * 70
+        self.abilityCd = 3.5
+        FX.ring(cx(self), cy(self), self.color, 10, 10)
+    end
+end
+
+local function abilityBurst(self, dt, worm, addProjectile)
+    if self.abilityCd <= 0 then
+        self.abilityCd = 3.0
+        FX.ring(cx(self), cy(self), self.color, 12, 10)
+        FX.shakeFor(0.1, 1)
+        local n = 10
+        for i = 0, n - 1 do
+            local a = (i / n) * math.pi * 2
+            addProjectile({
+                x = cx(self), y = cy(self),
+                vx = math.cos(a) * 55, vy = math.sin(a) * 55,
+                life = 2.5, damage = 1, color = self.color,
+            })
+        end
+    end
+end
+
+local function abilitySummon(self, dt, addEnemy, enemies)
+    if self.abilityCd <= 0 and enemies and #enemies < 14 then
+        self.abilityCd = 5.0
+        FX.ring(cx(self), cy(self), {1, 1, 1}, 12, 12)
+        for i = 1, 2 do
+            local a = math.random() * math.pi * 2
+            local minion = Enemy.new(cx(self) + math.cos(a) * 16, cy(self) + math.sin(a) * 16, "bit", 1)
+            addEnemy(minion)
+            FX.spark(minion.x, minion.y, minion.color, 6, 60, 0.3)
+        end
+    end
+end
+
+function Enemy:update(dt, worm, addEnemy, addProjectile, enemies)
     self.hitFlash = math.max(0, self.hitFlash - dt)
     self.bobT = self.bobT + dt * 4
     self.spinT = self.spinT + dt
+    self.abilityCd = self.abilityCd - dt
+    self.shieldTimer = math.max(0, self.shieldTimer - dt)
+    self.sinceHit = self.sinceHit + dt
+
+    -- RAGE passive: below 35% HP, move faster and act more often
+    self.raging = self.hp / self.maxHp < 0.35
+    local speed = self.speed
+    if self.raging then speed = speed * 1.5; self.abilityCd = self.abilityCd - dt * 0.5 end
 
     local dx = worm.x - self.x
     local dy = worm.y - self.y
     local d = math.sqrt(dx * dx + dy * dy)
-    if d > 0.1 then
+
+    -- abilities (some override movement)
+    local handled = false
+    local ab = self.ability
+    if ab == "boss" then
+        if not self._bossPick or self.abilityCd <= 0 then
+            self._bossPick = ({ "dash", "jump", "burst", "summon", "shield" })[math.random(1, 5)]
+        end
+        ab = self._bossPick
+    end
+
+    if ab == "dash" then handled = abilityDash(self, dt, worm, dx, dy, d)
+    elseif ab == "shield" then abilityShield(self)
+    elseif ab == "heal" then abilityHeal(self, dt, enemies)
+    elseif ab == "jump" then handled = abilityJump(self, dt, worm, d)
+    elseif ab == "blink" then abilityBlink(self, dt, worm, d)
+    elseif ab == "burst" then abilityBurst(self, dt, worm, addProjectile)
+    elseif ab == "summon" then abilitySummon(self, dt, addEnemy, enemies) end
+
+    if not handled then
         if self.ranged then
             if d > 60 then
-                self.x = self.x + (dx / d) * self.speed * dt
-                self.y = self.y + (dy / d) * self.speed * dt
+                self.x = self.x + (dx / d) * speed * dt
+                self.y = self.y + (dy / d) * speed * dt
             end
             self.fireTimer = self.fireTimer - dt
             if self.fireTimer <= 0 then
                 self.fireTimer = 1.4
                 addProjectile({
-                    x = self.x + self.w / 2, y = self.y + self.h / 2,
+                    x = cx(self), y = cy(self),
                     vx = (dx / d) * 70, vy = (dy / d) * 70,
                     life = 3, damage = 1, color = self.color,
                 })
             end
-        else
-            self.x = self.x + (dx / d) * self.speed * dt
-            self.y = self.y + (dy / d) * self.speed * dt
+        elseif d > 0.1 then
+            self.x = self.x + (dx / d) * speed * dt
+            self.y = self.y + (dy / d) * speed * dt
         end
     end
 
@@ -87,6 +262,13 @@ end
 local function setBodyColor(self)
     if self.hitFlash > 0 then
         love.graphics.setColor(1, 1, 1, 1)
+    elseif self.raging then
+        -- pulsing red-hot tint when enraged
+        local p = 0.5 + 0.5 * math.sin(self.spinT * 12)
+        love.graphics.setColor(
+            math.min(1, self.color[1] + 0.4 * p),
+            self.color[2] * (0.6 - 0.2 * p),
+            self.color[3] * (0.6 - 0.2 * p), 1)
     else
         love.graphics.setColor(self.color[1], self.color[2], self.color[3], 1)
     end
@@ -416,8 +598,32 @@ function sprites.root(self)
 end
 
 function Enemy:draw()
+    -- jump telegraph: shadow grows / warning ring on ground
+    if self.jumpState == "telegraph" then
+        love.graphics.setColor(1, 0.2, 0.2, 0.4 + 0.4 * math.sin(self.bobT * 6))
+        love.graphics.circle("line", cx(self), cy(self) + self.h / 2, 8)
+    end
+
     local draw = sprites[self.arch] or sprites.bit
     draw(self)
+
+    -- heal glow
+    if self.healGlow and self.healGlow > 0 then
+        love.graphics.setColor(0.4, 1, 0.5, self.healGlow * 0.6)
+        love.graphics.circle("line", cx(self), cy(self), self.w)
+        love.graphics.setColor(0.4, 1, 0.5, 1)
+        px(cx(self) - 2, cy(self) - 5, 1, 3)
+        px(cx(self) - 3, cy(self) - 4, 3, 1)
+    end
+
+    -- shield bubble
+    if self.shieldTimer > 0 then
+        local a = 0.3 + 0.3 * math.sin(self.spinT * 8)
+        love.graphics.setColor(0.5, 0.8, 1, a + 0.3)
+        love.graphics.circle("line", cx(self), cy(self), self.w * 0.8 + 2)
+        love.graphics.setColor(0.7, 0.9, 1, a)
+        love.graphics.circle("line", cx(self), cy(self), self.w * 0.8 + 1)
+    end
 
     if self.maxHp > 3 then
         local bw = self.w

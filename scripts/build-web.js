@@ -32,4 +32,21 @@ if (!fs.existsSync(indexPath)) {
     console.error("ERROR: love.js did not produce an index.html in", OUT_DIR);
     process.exit(1);
 }
+
+// Copy favicon and inject a <link> into index.html so the browser stops 404ing.
+const favSrc = path.join(ROOT, "assets", "favicon.svg");
+if (fs.existsSync(favSrc)) {
+    fs.copyFileSync(favSrc, path.join(OUT_DIR, "favicon.svg"));
+    let html = fs.readFileSync(indexPath, "utf8");
+    if (!html.includes("favicon.svg")) {
+        const link = '<link rel="icon" type="image/svg+xml" href="favicon.svg">';
+        if (html.includes("</head>")) {
+            html = html.replace("</head>", "  " + link + "\n</head>");
+        } else if (html.includes("<head>")) {
+            html = html.replace("<head>", "<head>\n  " + link);
+        }
+        fs.writeFileSync(indexPath, html);
+    }
+}
+
 console.log("web build ready at", OUT_DIR);
