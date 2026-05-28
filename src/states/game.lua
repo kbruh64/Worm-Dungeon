@@ -3,25 +3,46 @@ local Enemy = require("src.entities.enemy")
 local Progress = require("src.progress")
 local Weapons = require("src.weapons")
 local FX = require("src.fx")
+local Room = require("src.dungeons.room")
 
 local Game = {}
 
 local worm
 local enemies, projectiles
+local room
 local input
 local banner, bannerTimer
 local clearTimer
 
+local function fits(x, y, w, h)
+    if not room then return true end
+    for _, o in ipairs(room.obstacles) do
+        if not (x + w <= o.x or o.x + o.w <= x or y + h <= o.y or o.y + o.h <= y) then
+            return false
+        end
+    end
+    return true
+end
+
 local function spawnDungeon()
     local d = Progress.dungeon()
+    room = Room.new(d, Progress.currentDungeon * 1009 + 17)
     enemies, projectiles = {}, {}
+    local x1, y1, x2, y2 = room:bounds()
     for _ = 1, d.enemyCount do
-        local x = 40 + math.random(0, GAME_W - 80)
-        local y = 40 + math.random(0, GAME_H - 80)
         local arch = d.archetype
         if d.boss and Progress.isFinal() then arch = "root"
         elseif d.boss then arch = "kernel" end
-        table.insert(enemies, Enemy.new(x, y, arch, d.enemyHp))
+        local hp = d.enemyHp
+        -- place in a free tile
+        local tries = 0
+        local ex, ey
+        repeat
+            tries = tries + 1
+            ex = x1 + 16 + math.random(0, math.floor((x2 - x1 - 48) / 8)) * 8
+            ey = y1 + 12 + math.random(0, math.floor((y2 - y1 - 36) / 8)) * 8
+        until fits(ex, ey, 18, 18) or tries > 30
+        table.insert(enemies, Enemy.new(ex, ey, arch, hp))
     end
     banner = d.name
     bannerTimer = 2.0
@@ -64,17 +85,22 @@ end
 function Game:update(dt)
     if bannerTimer then bannerTimer = math.max(0, bannerTimer - dt); if bannerTimer == 0 then bannerTimer = nil end end
     FX.update(dt)
+    room:update(dt)
 
     readInput()
     local mgx, mgy = MouseGame()
     worm:aimAt(mgx, mgy)
+    local prevX, prevY = worm.x, worm.y
     worm:update(dt, input, Progress.speedBonus)
+    worm.x, worm.y = room:resolveCollision(worm.x, worm.y, worm.w, worm.h, prevX, prevY)
 
     local hb = worm:hitbox()
     for _, e in ipairs(enemies) do
+        local epx, epy = e.x, e.y
         e:update(dt, worm,
             function(ne) table.insert(enemies, ne) end,
             function(p) table.insert(projectiles, p) end)
+        e.x, e.y = room:resolveCollision(e.x, e.y, e.w, e.h, epx, epy)
         if hb and not e.dead then
             local hit
             if hb.shape == "radial" then
@@ -113,12 +139,14 @@ function Game:update(dt)
 
     if worm.hp <= 0 then Progress.reset(); worm = nil; SM:switch("menu"); return end
 
-    if #enemies == 0 then
-        clearTimer = (clearTimer or 0) + dt
-        if clearTimer > 1.0 then
-            clearTimer = nil
-            SM:switch("reward")
-        end
+    if #enemies == 0 and not room.exitOpen then
+        room.exitOpen = true
+        banner = "ROOM CLEARED - HEAD TO EXIT"
+        bannerTimer = 1.6
+        FX.flashFor(0.15, 0.4, 1, 0.6)
+    end
+    if room.exitOpen and room:exitHit(worm.x, worm.y, worm.w, worm.h) then
+        SM:switch("reward")
     end
 end
 
@@ -165,18 +193,16 @@ end
 function Game:draw()
     local d = Progress.dungeon()
     local p = d.palette
-    love.graphics.clear(p.bg[1], p.bg[2], p.bg[3], 1)
+    love.graphics.clear(p.bg[1] * 0.5, p.bg[2] * 0.5, p.bg[3] * 0.5, 1)
 
     local sx, sy = FX.shakeOffset()
     love.graphics.push()
     love.graphics.translate(math.floor(sx), math.floor(sy))
 
-    love.graphics.setColor(p.accent[1] * 0.3, p.accent[2] * 0.3, p.accent[3] * 0.3, 0.5)
-    for x = 0, GAME_W, 16 do love.graphics.line(x, 16, x, GAME_H - 4) end
-    for y = 20, GAME_H - 4, 16 do love.graphics.line(0, y, GAME_W, y) end
-
-    love.graphics.setColor(p.accent[1], p.accent[2], p.accent[3], 1)
-    love.graphics.rectangle("line", 2, 14, GAME_W - 4, GAME_H - 18)
+    room:drawFloor()
+    room:drawFrame()
+    room:drawObstacles()
+    room:drawExit()
 
     for _, e in ipairs(enemies) do e:draw() end
     for _, pr in ipairs(projectiles) do

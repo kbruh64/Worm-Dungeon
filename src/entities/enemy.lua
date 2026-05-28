@@ -98,160 +98,289 @@ end
 
 local sprites = {}
 
--- bit: tiny 6x6 diamond with eye
+local function drawShadow(self)
+    love.graphics.setColor(0, 0, 0, 0.35)
+    love.graphics.ellipse("fill", self.x + self.w / 2, self.y + self.h + 1, self.w / 2.5, 1.5)
+end
+
+local function glowEye(cx, cy, color)
+    love.graphics.setColor(color[1], color[2], color[3], 0.4)
+    px(cx - 1, cy - 1, 3, 3)
+    love.graphics.setColor(color[1], color[2], color[3], 1)
+    px(cx, cy, 1, 1)
+end
+
+-- bit: tiny pulsing diamond core with glowing eye
 function sprites.bit(self)
+    drawShadow(self)
     local cx, cy = self.x + self.w / 2, self.y + self.h / 2
-    local bob = math.sin(self.bobT) * 0.5
+    local bob = math.sin(self.bobT) * 0.6
     setBodyColor(self)
+    -- diamond body
     px(cx - 3, cy - 1 + bob, 6, 2)
     px(cx - 2, cy - 2 + bob, 4, 1)
     px(cx - 2, cy + 1 + bob, 4, 1)
     px(cx - 1, cy - 3 + bob, 2, 1)
     px(cx - 1, cy + 2 + bob, 2, 1)
-    love.graphics.setColor(0, 0, 0, 1)
-    px(cx - 1, cy + bob, 1, 1)
+    -- inner shine
+    love.graphics.setColor(1, 1, 1, 0.6)
+    px(cx - 1, cy - 1 + bob, 1, 1)
+    -- glowing eye
+    glowEye(cx, cy + bob, {1, 1, 0.4})
 end
 
--- byte: square robot with antenna + two eyes
+-- byte: cyberpunk robot head with antennas, glowing eyes, jagged mouth, side panels
 function sprites.byte(self)
+    drawShadow(self)
+    local hop = math.floor(self.bobT * 2) % 2 == 0 and 0 or -1
+    local x, y = self.x, self.y + hop
+    -- antennae with pulsing tips
     setBodyColor(self)
-    px(self.x + 1, self.y + 2, self.w - 2, self.h - 3)
-    -- antenna
-    px(self.x + self.w / 2, self.y, 1, 2)
-    love.graphics.setColor(1, 1, 0.4, 1)
-    px(self.x + self.w / 2, self.y - 1, 1, 1)
+    px(x + 2, y, 1, 2)
+    px(x + self.w - 3, y, 1, 2)
+    local pulse = (math.floor(self.bobT * 3) % 2 == 0) and 1 or 0
+    love.graphics.setColor(1, 0.4 + pulse * 0.4, 0.2, 1)
+    px(x + 2, y - 1 - pulse, 1, 1)
+    px(x + self.w - 3, y - 1 - pulse, 1, 1)
+    -- body
+    setBodyColor(self)
+    px(x + 1, y + 2, self.w - 2, self.h - 3)
+    -- side panel highlights
+    love.graphics.setColor(shadeColor(self.color, 1.4))
+    px(x + 1, y + 2, 1, self.h - 3)
+    px(x + 1, y + 2, self.w - 2, 1)
     -- shadow side
-    love.graphics.setColor(shadeColor(self.color, 0.5))
-    px(self.x + self.w - 2, self.y + 2, 1, self.h - 3)
-    px(self.x + 1, self.y + self.h - 2, self.w - 2, 1)
-    -- eyes
+    love.graphics.setColor(shadeColor(self.color, 0.4))
+    px(x + self.w - 2, y + 2, 1, self.h - 3)
+    px(x + 1, y + self.h - 2, self.w - 2, 1)
+    -- glowing eyes
     love.graphics.setColor(0, 0, 0, 1)
-    px(self.x + 3, self.y + 5, 2, 2)
-    px(self.x + self.w - 5, self.y + 5, 2, 2)
-    love.graphics.setColor(0.4, 1, 1, 1)
-    px(self.x + 3, self.y + 5, 1, 1)
-    px(self.x + self.w - 5, self.y + 5, 1, 1)
-    -- mouth
+    px(x + 3, y + 5, 2, 2)
+    px(x + self.w - 5, y + 5, 2, 2)
+    glowEye(x + 3, y + 5, {0.4, 1, 1})
+    glowEye(x + self.w - 5, y + 5, {0.4, 1, 1})
+    -- jagged metal grin
     love.graphics.setColor(0, 0, 0, 1)
-    px(self.x + 4, self.y + 9, self.w - 8, 1)
+    px(x + 3, y + self.h - 4, self.w - 6, 2)
+    love.graphics.setColor(1, 1, 1, 0.8)
+    for i = 0, 2 do px(x + 3 + i * 2, y + self.h - 4, 1, 1) end
+    for i = 0, 1 do px(x + 4 + i * 2, y + self.h - 3, 1, 1) end
+    -- bolts in corners
+    love.graphics.setColor(shadeColor(self.color, 1.6))
+    px(x + 2, y + 3, 1, 1); px(x + self.w - 3, y + 3, 1, 1)
+    px(x + 2, y + self.h - 3, 1, 1); px(x + self.w - 3, y + self.h - 3, 1, 1)
 end
 
--- packet: chevron arrow, leaning toward direction
+-- packet: arrowhead with motion trails behind it
 function sprites.packet(self)
-    setBodyColor(self)
+    drawShadow(self)
     local x, y = self.x, self.y
+    -- motion trail
+    love.graphics.setColor(self.color[1], self.color[2], self.color[3], 0.3)
+    px(x - 2, y + 3, 1, 2)
+    px(x - 4, y + 3, 1, 2)
+    love.graphics.setColor(self.color[1], self.color[2], self.color[3], 0.6)
+    px(x, y + 2, 2, 4)
+    -- arrowhead body
+    setBodyColor(self)
     px(x + 0, y + 2, 2, 4)
     px(x + 2, y + 1, 2, 6)
     px(x + 4, y + 0, 2, 8)
     px(x + 6, y + 1, 2, 6)
     px(x + 8, y + 2, 2, 4)
-    -- highlight
-    love.graphics.setColor(1, 1, 1, 0.7)
-    px(x + 4, y + 1, 2, 1)
+    -- white core highlight
+    love.graphics.setColor(1, 1, 1, 1)
+    px(x + 4, y + 3, 2, 2)
+    -- inner shadow
+    love.graphics.setColor(shadeColor(self.color, 0.5))
+    px(x + 2, y + 6, 2, 1)
+    px(x + 4, y + 7, 2, 1)
+    px(x + 6, y + 6, 2, 1)
 end
 
--- daemon: floating eye with horns
+-- daemon: floating cyclops with horns, tracking iris, magical aura
 function sprites.daemon(self)
-    local bob = math.sin(self.bobT) * 1
+    drawShadow(self)
+    local bob = math.sin(self.bobT) * 1.5
     local cx, cy = self.x + self.w / 2, self.y + self.h / 2 + bob
+    -- pulsing aura
+    love.graphics.setColor(self.color[1], self.color[2], self.color[3], 0.25)
+    love.graphics.circle("fill", cx, cy, 9 + math.sin(self.bobT * 2))
     setBodyColor(self)
-    -- horns
-    px(self.x + 2, self.y + bob, 2, 3)
-    px(self.x + self.w - 4, self.y + bob, 2, 3)
-    -- body diamond
+    -- horns/spikes
+    px(self.x + 1, self.y + bob, 2, 3)
+    px(self.x + self.w - 3, self.y + bob, 2, 3)
+    px(self.x + 2, self.y - 1 + bob, 1, 1)
+    px(self.x + self.w - 3, self.y - 1 + bob, 1, 1)
+    -- body hexagon
     px(cx - 5, cy - 1, 10, 3)
     px(cx - 4, cy - 3, 8, 2)
     px(cx - 4, cy + 2, 8, 2)
     px(cx - 3, cy - 4, 6, 1)
     px(cx - 3, cy + 4, 6, 1)
-    -- iris
+    -- highlight ridge
+    love.graphics.setColor(shadeColor(self.color, 1.4))
+    px(cx - 3, cy - 3, 6, 1)
+    px(cx - 4, cy - 2, 2, 1)
+    -- shadow underside
+    love.graphics.setColor(shadeColor(self.color, 0.5))
+    px(cx - 3, cy + 3, 6, 1)
+    -- iris tracks somewhat
     love.graphics.setColor(1, 1, 1, 1)
     px(cx - 2, cy - 1, 4, 3)
+    local irisOff = math.cos(self.spinT * 0.5)
     love.graphics.setColor(1, 0.2, 0.2, 1)
-    px(cx - 1, cy, 2, 2)
+    px(cx - 1 + irisOff, cy, 2, 2)
     love.graphics.setColor(0, 0, 0, 1)
-    px(cx, cy, 1, 1)
+    px(cx + irisOff, cy, 1, 1)
+    -- eyelid line
+    love.graphics.setColor(0, 0, 0, 1)
+    px(cx - 2, cy - 2, 4, 1)
 end
 
--- firewall: brick wall with flames
+-- firewall: brick wall with layered flames + angry glare
 function sprites.firewall(self)
+    drawShadow(self)
+    local x, y = self.x, self.y
+    -- wall base
     setBodyColor(self)
-    px(self.x, self.y + 4, self.w, self.h - 4)
-    love.graphics.setColor(shadeColor(self.color, 0.6))
+    px(x, y + 5, self.w, self.h - 5)
+    -- brick pattern
+    love.graphics.setColor(shadeColor(self.color, 0.5))
     for r = 0, 2 do
-        for c = 0, 3 do
-            local bx = self.x + c * 5 + (r % 2 == 0 and 0 or 2)
-            local by = self.y + 4 + r * 5
-            px(bx, by, 4, 1) -- mortar lines
+        local offset = (r % 2 == 0) and 0 or 3
+        for c = -1, 4 do
+            local bx = x + offset + c * 6
+            local by = y + 5 + r * 5
+            if bx >= x and bx + 4 <= x + self.w then
+                px(bx, by, 1, 4)
+            end
+        end
+        px(x, y + 5 + r * 5 + 4, self.w, 1)
+    end
+    -- top highlight
+    love.graphics.setColor(shadeColor(self.color, 1.4))
+    px(x, y + 5, self.w, 1)
+    -- multi-layer flames
+    local flick = math.floor(self.bobT * 4) % 3
+    love.graphics.setColor(1, 0.2, 0, 1)
+    for i = 0, 4 do
+        local fx = x + i * 4
+        px(fx, y + 4, 3, 1)
+    end
+    love.graphics.setColor(1, 0.6, 0.1, 1)
+    for i = 0, 4 do
+        local fx = x + i * 4 + (i % 2 == flick and 0 or 0)
+        px(fx + 1, y + 2 + (flick == 1 and -1 or 0), 1, 2)
+        px(fx, y + 3, 3, 1)
+    end
+    love.graphics.setColor(1, 0.9, 0.3, 1)
+    for i = 0, 4 do
+        local fx = x + i * 4
+        px(fx + 1, y + 1 + (flick == 2 and -1 or 0), 1, 1)
+    end
+    love.graphics.setColor(1, 1, 0.8, 1)
+    for i = 0, 4 do
+        local fx = x + i * 4
+        if (i + flick) % 2 == 0 then
+            px(fx + 1, y, 1, 1)
         end
     end
-    -- flames on top
-    love.graphics.setColor(1, 0.8, 0.2, 1)
-    local flick = math.floor(self.bobT * 2) % 2
-    for i = 0, 4 do
-        local fx = self.x + i * 4
-        px(fx + 1, self.y + 1 + flick, 2, 3)
-        px(fx + 2, self.y + flick, 1, 1)
-    end
-    love.graphics.setColor(1, 0.3, 0.1, 1)
-    for i = 0, 4 do
-        local fx = self.x + i * 4
-        px(fx + 1, self.y + 3 + flick, 2, 1)
-    end
-    -- angry eyes
+    -- angry glowing eyes set into wall
     love.graphics.setColor(0, 0, 0, 1)
-    px(self.x + 4, self.y + 9, 2, 2)
-    px(self.x + self.w - 6, self.y + 9, 2, 2)
+    px(x + 4, y + 10, 3, 2)
+    px(x + self.w - 7, y + 10, 3, 2)
+    love.graphics.setColor(1, 0.3, 0, 1)
+    px(x + 5, y + 10, 1, 1)
+    px(x + self.w - 6, y + 10, 1, 1)
+    -- angry brow
+    love.graphics.setColor(0, 0, 0, 1)
+    px(x + 3, y + 9, 4, 1)
+    px(x + self.w - 7, y + 9, 4, 1)
 end
 
--- virus: spiky blob
+-- virus: spiky orb with rotating spikes, sharp teeth, beating nucleus
 function sprites.virus(self)
-    setBodyColor(self)
+    drawShadow(self)
     local cx, cy = self.x + self.w / 2, self.y + self.h / 2
-    -- main body
+    -- rotating spikes drawn first (under body)
+    setBodyColor(self)
+    for i = 0, 7 do
+        local a = (i / 8) * math.pi * 2 + self.spinT * 2
+        local r1, r2 = 5, 7
+        local x1, y1 = cx + math.cos(a) * r1, cy + math.sin(a) * r1
+        local x2, y2 = cx + math.cos(a) * r2, cy + math.sin(a) * r2
+        px(x1, y1, 1, 1)
+        px((x1 + x2) / 2, (y1 + y2) / 2, 1, 1)
+        px(x2, y2, 1, 1)
+    end
+    -- main blob body
+    setBodyColor(self)
     px(cx - 4, cy - 3, 8, 6)
     px(cx - 3, cy - 4, 6, 1)
     px(cx - 3, cy + 3, 6, 1)
-    -- spikes (rotating)
-    local s = math.floor(self.spinT * 4) % 4
-    local spikes = {{0,-6},{6,0},{0,6},{-6,0},{4,-4},{4,4},{-4,4},{-4,-4}}
-    for i, sp in ipairs(spikes) do
-        if (i + s) % 2 == 0 then
-            px(cx + sp[1], cy + sp[2], 1, 1)
-            px(cx + sp[1] * 0.7, cy + sp[2] * 0.7, 1, 1)
-        end
-    end
-    -- nucleus
+    -- highlight
+    love.graphics.setColor(shadeColor(self.color, 1.5))
+    px(cx - 3, cy - 3, 2, 2)
+    -- teeth at bottom
+    love.graphics.setColor(1, 1, 1, 1)
+    px(cx - 3, cy + 2, 1, 1); px(cx - 1, cy + 2, 1, 1); px(cx + 1, cy + 2, 1, 1); px(cx + 3, cy + 2, 1, 1)
+    -- evil eyes
     love.graphics.setColor(0, 0, 0, 1)
-    px(cx - 1, cy - 1, 2, 2)
+    px(cx - 2, cy - 1, 1, 2)
+    px(cx + 1, cy - 1, 1, 2)
+    -- beating nucleus
+    local pulse = math.floor(self.bobT * 3) % 2
+    love.graphics.setColor(1, 0.8, 0.2, 0.6 + pulse * 0.4)
+    px(cx, cy, 1, 1)
 end
 
--- kernel: layered diamond core
+-- kernel: rotating crystal core with energy aura + orbiting sparks
 function sprites.kernel(self)
+    drawShadow(self)
     local cx, cy = self.x + self.w / 2, self.y + self.h / 2
-    setBodyColor(self)
+    -- pulsing aura
+    local pulse = 1 + math.sin(self.bobT) * 0.15
+    love.graphics.setColor(self.color[1], self.color[2], self.color[3], 0.2)
+    love.graphics.circle("fill", cx, cy, 12 * pulse)
     -- outer diamond
-    for r = 0, 8 do
+    setBodyColor(self)
+    for r = 0, 9 do
         local w = 18 - r * 2
         if w > 0 then
-            px(cx - w / 2, cy - 8 + r, w, 1)
-            px(cx - w / 2, cy + 8 - r, w, 1)
+            px(cx - w / 2, cy - 9 + r, w, 1)
+            px(cx - w / 2, cy + 9 - r, w, 1)
         end
     end
-    -- inner glow
+    -- facet highlights
     love.graphics.setColor(shadeColor(self.color, 1.5))
-    for r = 0, 4 do
+    for r = 0, 5 do
+        px(cx - r, cy - 5 + r, 1, 1)
+        px(cx - r - 1, cy - 4 + r, 1, 1)
+    end
+    -- inner glow diamond
+    love.graphics.setColor(shadeColor(self.color, 1.8))
+    for r = 0, 5 do
         local w = 10 - r * 2
         if w > 0 then
-            px(cx - w / 2, cy - 4 + r, w, 1)
-            px(cx - w / 2, cy + 4 - r, w, 1)
+            px(cx - w / 2, cy - 5 + r, w, 1)
+            px(cx - w / 2, cy + 5 - r, w, 1)
         end
     end
-    -- core
-    love.graphics.setColor(1, 1, 1, 1)
+    -- hot core
+    love.graphics.setColor(1, 1, 0.8, 1)
     px(cx - 1, cy - 1, 2, 2)
-    love.graphics.setColor(1, 0.4, 0.2, 1)
+    love.graphics.setColor(1, 0.4, 0.1, 1)
     px(cx, cy, 1, 1)
+    -- orbiting sparks
+    for i = 0, 2 do
+        local a = self.spinT * 3 + i * (math.pi * 2 / 3)
+        local sx, sy = cx + math.cos(a) * 11, cy + math.sin(a) * 11
+        love.graphics.setColor(1, 1, 0.6, 1)
+        px(sx, sy, 1, 1)
+        love.graphics.setColor(1, 0.7, 0.3, 0.5)
+        px(sx + math.cos(a) * 1, sy + math.sin(a) * 1, 1, 1)
+    end
 end
 
 -- root (final boss): wide menacing skull-block

@@ -17,14 +17,15 @@ function love.load()
     canvas = love.graphics.newCanvas(GAME_W, GAME_H)
     canvas:setFilter("nearest", "nearest")
 
-    local path = "assets/fonts/Mojangles.ttf"
+    local path = "assets/fonts/PressStart2P.ttf"
     local function tryFont(size)
         if love.filesystem.getInfo(path) then
             return love.graphics.newFont(path, size, "mono")
         end
         return love.graphics.newFont(size)
     end
-    Fonts = { small = tryFont(8), medium = tryFont(16), large = tryFont(32) }
+    -- Press Start 2P is an 8x8 pixel font; pick sizes that are exact multiples.
+    Fonts = { small = tryFont(8), medium = tryFont(16), large = tryFont(24) }
     Fonts.small:setFilter("nearest", "nearest")
     Fonts.medium:setFilter("nearest", "nearest")
     Fonts.large:setFilter("nearest", "nearest")
