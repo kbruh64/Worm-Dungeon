@@ -57,7 +57,7 @@ function MouseGame()
 end
 
 local function drawScaled()
-    love.graphics.setCanvas(canvas)
+    love.graphics.setCanvas({ canvas, stencil = true })
     love.graphics.clear(0.04, 0.05, 0.08, 1)
     sm:draw()
     love.graphics.setCanvas()
