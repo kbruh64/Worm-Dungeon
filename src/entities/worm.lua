@@ -7,7 +7,7 @@ Worm.__index = Worm
 local SPEED = 88
 local DASH_SPEED = 220
 local DASH_TIME = 0.18
-local INVULN_TIME = 0.5
+local INVULN_TIME = 0.7
 local COMBO_WINDOW = 0.6
 
 local BODY_LEN = 8        -- visible trailing body pixels
@@ -20,9 +20,10 @@ function Worm.new(x, y)
         x = x, y = y, w = 3, h = 3,
         dir = 1,
         aimAngle = 0,
-        hp = 6, maxHp = 6,
+        hp = 10, maxHp = 10,
         attack = nil,
         attackTimer = 0,
+        atkCd = 0,
         comboCount = 0,
         comboTimer = 0,
         dashTimer = 0,
@@ -60,11 +61,12 @@ function Worm:hitbox()
 end
 
 function Worm:fireWeapon(name)
-    if self.attack then return end
+    if self.attack or self.atkCd > 0 then return end
     local def = Weapons.get(name)
     if not def then return end
     self.attack = name
     self.attackTimer = def.dur
+    self.atkCd = def.dur + (def.cd or 0.25)
     if self.comboTimer > 0 then
         self.comboCount = self.comboCount + 1
     else
@@ -113,6 +115,7 @@ function Worm:update(dt, input, speedBonus)
     self.time = self.time + dt
     self.attackTimer = math.max(0, self.attackTimer - dt)
     if self.attackTimer == 0 then self.attack = nil end
+    self.atkCd = math.max(0, self.atkCd - dt)
     self.comboTimer = math.max(0, self.comboTimer - dt)
     if self.comboTimer == 0 then self.comboCount = 0 end
     self.dashTimer = math.max(0, self.dashTimer - dt)

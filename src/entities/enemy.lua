@@ -9,10 +9,10 @@ local archetypes = {
     byte     = { w = 12, h = 12, speed = 42, hpMul = 2.5, color = {1, 0.6, 0.3}, contact = 1, ability = "dash" },
     packet   = { w = 12, h = 8,  speed = 70, hpMul = 2,   color = {0.5, 0.9, 1}, contact = 1, ability = "dash" },
     daemon   = { w = 14, h = 14, speed = 22, hpMul = 2.5, color = {0.8, 0.4, 1}, contact = 1, ranged = true, ability = "burst" },
-    firewall = { w = 18, h = 18, speed = 26, hpMul = 4,   color = {1, 0.5, 0.2}, contact = 2, ability = "shield" },
+    firewall = { w = 18, h = 18, speed = 26, hpMul = 4,   color = {1, 0.5, 0.2}, contact = 1, ability = "shield" },
     virus    = { w = 12, h = 12, speed = 48, hpMul = 3,   color = {0.4, 1, 0.6}, contact = 1, splits = true, ability = "heal" },
     kernel   = { w = 20, h = 20, speed = 34, hpMul = 4.5, color = {1, 0.9, 0.5}, contact = 2, ability = "jump" },
-    root     = { w = 32, h = 28, speed = 46, hpMul = 6,   color = {1, 0.3, 0.6}, contact = 3, ability = "boss" },
+    root     = { w = 32, h = 28, speed = 46, hpMul = 6,   color = {1, 0.3, 0.6}, contact = 2, ability = "boss" },
 }
 
 function Enemy.new(x, y, arch, hpScale)
@@ -29,12 +29,13 @@ function Enemy.new(x, y, arch, hpScale)
         bobT = math.random() * 6.28,
         spinT = 0,
         -- ability state
-        abilityCd = 1.5 + math.random() * 2,
+        abilityCd = 3 + math.random() * 2.5,
         shieldTimer = 0,
         dashTimer = 0, dvx = 0, dvy = 0,
         jumpState = nil, jumpTimer = 0, jx = 0, jy = 0,
         healGlow = 0,
         sinceHit = 99,
+        hurtCd = 0,
     }, Enemy)
 end
 
@@ -44,6 +45,8 @@ local function cx(self) return self.x + self.w / 2 end
 local function cy(self) return self.y + self.h / 2 end
 
 function Enemy:damage(n)
+    if self.hurtCd > 0 then return end
+    self.hurtCd = 0.25
     self.sinceHit = 0
     if self.shieldTimer > 0 then
         -- shield absorbs: chip it instead of taking full damage
@@ -136,7 +139,7 @@ local function abilityJump(self, dt, worm, d)
             FX.shakeFor(0.25, 2.5)
             -- slam shockwave: hurt worm if close on landing
             local wdx, wdy = worm:centerX() - cx(self), worm:centerY() - cy(self)
-            if wdx * wdx + wdy * wdy < 26 * 26 then worm:damage(self.contact + 1) end
+            if wdx * wdx + wdy * wdy < 24 * 24 then worm:damage(self.contact) end
         end
         return true
     end
@@ -163,16 +166,16 @@ end
 
 local function abilityBurst(self, dt, worm, addProjectile)
     if self.abilityCd <= 0 then
-        self.abilityCd = 3.0
+        self.abilityCd = 5.0
         FX.ring(cx(self), cy(self), self.color, 12, 10)
         FX.shakeFor(0.1, 1)
-        local n = 10
+        local n = 6
         for i = 0, n - 1 do
             local a = (i / n) * math.pi * 2
             addProjectile({
                 x = cx(self), y = cy(self),
-                vx = math.cos(a) * 55, vy = math.sin(a) * 55,
-                life = 2.5, damage = 1, color = self.color,
+                vx = math.cos(a) * 48, vy = math.sin(a) * 48,
+                life = 2.2, damage = 1, color = self.color,
             })
         end
     end
@@ -198,11 +201,12 @@ function Enemy:update(dt, worm, addEnemy, addProjectile, enemies)
     self.abilityCd = self.abilityCd - dt
     self.shieldTimer = math.max(0, self.shieldTimer - dt)
     self.sinceHit = self.sinceHit + dt
+    self.hurtCd = math.max(0, self.hurtCd - dt)
 
     -- RAGE passive: below 35% HP, move faster and act more often
     self.raging = self.hp / self.maxHp < 0.35
     local speed = self.speed
-    if self.raging then speed = speed * 1.5; self.abilityCd = self.abilityCd - dt * 0.5 end
+    if self.raging then speed = speed * 1.35; self.abilityCd = self.abilityCd - dt * 0.25 end
 
     local dx = worm.x - self.x
     local dy = worm.y - self.y
@@ -234,10 +238,10 @@ function Enemy:update(dt, worm, addEnemy, addProjectile, enemies)
             end
             self.fireTimer = self.fireTimer - dt
             if self.fireTimer <= 0 then
-                self.fireTimer = 1.4
+                self.fireTimer = 2.4
                 addProjectile({
                     x = cx(self), y = cy(self),
-                    vx = (dx / d) * 70, vy = (dy / d) * 70,
+                    vx = (dx / d) * 65, vy = (dy / d) * 65,
                     life = 3, damage = 1, color = self.color,
                 })
             end

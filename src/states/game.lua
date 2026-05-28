@@ -77,7 +77,7 @@ local function spawnDungeon()
 end
 
 function Game:enter()
-    local baseMax = 6 + Progress.maxHpBonus
+    local baseMax = 10 + Progress.maxHpBonus
     if not worm or worm.hp <= 0 or Progress.currentDungeon == 1 then
         worm = Worm.new(0, 0)
     end
@@ -144,7 +144,7 @@ function Game:update(dt)
                 hit = rectsOverlap(hb, { x = e.x, y = e.y, w = e.w, h = e.h })
             end
             if hit then
-                local dmg = hb.damage + Progress.dmgBonus + math.floor(worm.comboCount / 2)
+                local dmg = hb.damage + Progress.dmgBonus + math.min(2, math.floor(worm.comboCount / 4))
                 e:damage(dmg)
                 if e.dead and e.splits and e.w > 6 then
                     for _ = 1, 2 do
@@ -227,12 +227,21 @@ local function drawHud()
     -- equipped weapon (lower-left, no hotbar)
     local def = Weapons.get(Progress.equipped)
     if def then
-        love.graphics.setColor(def.color[1], def.color[2], def.color[3], 1)
+        local ready = worm.atkCd <= 0
+        love.graphics.setColor(def.color[1], def.color[2], def.color[3], ready and 1 or 0.4)
         love.graphics.setFont(Fonts.medium)
         love.graphics.print(def.glyph, 4, GAME_H - 18)
         love.graphics.setFont(Fonts.small)
-        love.graphics.setColor(1, 1, 1, 1)
+        love.graphics.setColor(1, 1, 1, ready and 1 or 0.5)
         love.graphics.print(string.upper(Progress.equipped), 16, GAME_H - 12)
+        -- cooldown bar
+        local total = def.dur + (def.cd or 0.25)
+        if not ready then
+            love.graphics.setColor(1, 1, 1, 0.2)
+            love.graphics.rectangle("fill", 4, GAME_H - 3, 40, 2)
+            love.graphics.setColor(def.color[1], def.color[2], def.color[3], 1)
+            love.graphics.rectangle("fill", 4, GAME_H - 3, 40 * (1 - worm.atkCd / total), 2)
+        end
         if #Progress.weapons > 1 then
             love.graphics.setColor(1, 1, 1, 0.5)
             love.graphics.print("Q swap", GAME_W - 38, GAME_H - 10)

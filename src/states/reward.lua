@@ -80,7 +80,7 @@ local function confirm()
     if Progress.currentDungeon > Progress.total() then
         SM:switch("victory")
     else
-        SM:switch("game")
+        SM:switch("story", { mode = "level" })
     end
 end
 

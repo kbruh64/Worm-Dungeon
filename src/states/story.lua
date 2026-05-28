@@ -1,18 +1,30 @@
+local Progress = require("src.progress")
+
 local Story = {}
 
 local pages
 local page = 1
 local timer = 0
 local revealed = 0
+local mode = "intro"
 
 function Story:enter(opts)
     opts = opts or {}
-    if opts.victory then
+    mode = opts.mode or (opts.victory and "victory") or "intro"
+
+    if mode == "victory" then
         pages = {
             "The core falls silent.",
             "The wires cool. The fans still.",
             "A green worm wriggles free into open air.",
             "-- END --",
+        }
+    elseif mode == "level" then
+        local d = Progress.dungeon()
+        pages = {
+            string.format("SECTOR %02d / %02d", Progress.currentDungeon, Progress.total()),
+            d.name,
+            d.story or "",
         }
     else
         pages = {
@@ -32,19 +44,34 @@ function Story:update(dt)
     timer = timer + dt
     local target = #pages[page]
     if revealed < target then
-        revealed = math.min(target, revealed + dt * 40)
+        revealed = math.min(target, revealed + dt * 45)
     end
 end
 
 function Story:draw()
-    love.graphics.setFont(Fonts.medium)
+    -- emphasize the title page (page with the sector name) in level mode
+    if mode == "level" and page == 2 then
+        love.graphics.setFont(Fonts.large)
+    else
+        love.graphics.setFont(Fonts.medium)
+    end
     love.graphics.setColor(1, 1, 1, 1)
     local text = pages[page]:sub(1, math.floor(revealed))
-    love.graphics.printf(text, 20, 60, GAME_W - 40, "center")
+    love.graphics.printf(text, 16, 56, GAME_W - 32, "center")
 
     love.graphics.setFont(Fonts.small)
     love.graphics.setColor(1, 1, 1, 0.4 + 0.4 * math.sin(timer * 3))
     love.graphics.printf("[ENTER]", 0, GAME_H - 20, GAME_W, "center")
+end
+
+local function advance()
+    if mode == "victory" then
+        SM:switch("menu")
+    elseif mode == "intro" then
+        SM:switch("story", { mode = "level" })
+    else
+        SM:switch("game")
+    end
 end
 
 function Story:keypressed(key)
@@ -55,15 +82,9 @@ function Story:keypressed(key)
         end
         page = page + 1
         revealed = 0
-        if page > #pages then
-            if pages[#pages] == "-- END --" then
-                SM:switch("menu")
-            else
-                SM:switch("game")
-            end
-        end
+        if page > #pages then advance() end
     elseif key == "escape" then
-        SM:switch("menu")
+        if mode == "level" then SM:switch("game") else SM:switch("menu") end
     end
 end
 
