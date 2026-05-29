@@ -42,7 +42,7 @@ function Enemy.new(x, y, arch, hpScale)
 end
 
 function Enemy:applyKnockback(fromX, fromY, force)
-    local dx, dy = cx(self) - fromX, cy(self) - fromY
+    local dx, dy = (self.x + self.w / 2) - fromX, (self.y + self.h / 2) - fromY
     local d = math.sqrt(dx * dx + dy * dy)
     if d < 0.1 then dx, dy, d = 1, 0, 1 end
     self.kbX = self.kbX + (dx / d) * force
