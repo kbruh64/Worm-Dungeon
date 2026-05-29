@@ -33,6 +33,19 @@ if (!fs.existsSync(indexPath)) {
     process.exit(1);
 }
 
+// Strip love.js / Emscripten branding from the generated page.
+{
+    let html = fs.readFileSync(indexPath, "utf8");
+    html = html.replace(/^\s*loadingContext\.fillText\("Powered By Emscripten\."[^\n]*\n/m, "");
+    html = html.replace(/^\s*loadingContext\.fillText\("Powered By LÖVE\."[^\n]*\n/m, "");
+    // Replace footer with a clean fullscreen-only line.
+    html = html.replace(
+        /<footer>[\s\S]*?<\/footer>/,
+        '<footer>\n      <p><button onclick="goFullScreen();">Fullscreen</button></p>\n    </footer>'
+    );
+    fs.writeFileSync(indexPath, html);
+}
+
 // Copy favicon and inject a <link> into index.html so the browser stops 404ing.
 const favSrc = path.join(ROOT, "assets", "favicon.svg");
 if (fs.existsSync(favSrc)) {
