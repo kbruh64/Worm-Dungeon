@@ -77,14 +77,14 @@ local function spawnDungeon()
 end
 
 function Game:enter()
-    local baseMax = 10 + Progress.maxHpBonus
+    local baseMax = 100 + Progress.maxHpBonus
     if not worm or worm.hp <= 0 or Progress.currentDungeon == 1 then
         worm = Worm.new(0, 0)
     end
     worm.maxHp = baseMax
     if Progress.consumeHealRequest() then worm.hp = worm.maxHp end
     worm.hp = math.min(worm.hp, worm.maxHp)
-    if worm.hp < worm.maxHp then worm.hp = math.min(worm.maxHp, worm.hp + 1) end
+    if worm.hp < worm.maxHp then worm.hp = math.min(worm.maxHp, worm.hp + 15) end
     input = {}
     clearTimer = nil
     FX.reset()
@@ -145,7 +145,14 @@ function Game:update(dt)
             end
             if hit then
                 local dmg = hb.damage + Progress.dmgBonus + math.min(2, math.floor(worm.comboCount / 4))
-                e:damage(dmg)
+                local landed = e:damage(dmg)
+                if landed then
+                    local def = Weapons.get(hb.type)
+                    if def then
+                        if def.knock then e:applyKnockback(worm:centerX(), worm:centerY(), def.knock) end
+                        if def.dot then e:applyPoison(def.dot.dmg, def.dot.time) end
+                    end
+                end
                 if e.dead and e.splits and e.w > 6 then
                     for _ = 1, 2 do
                         table.insert(enemies, Enemy.new(e.x, e.y, "bit", 1))
@@ -203,19 +210,20 @@ function Game:update(dt)
 end
 
 local function drawHud()
-    -- hp pips
+    -- hp bar + numeric readout
     love.graphics.setFont(Fonts.small)
+    local barX, barW = 4, 70
+    local frac = math.max(0, worm.hp) / worm.maxHp
+    love.graphics.setColor(0, 0, 0, 0.6)
+    love.graphics.rectangle("fill", barX, 4, barW, 7)
+    -- color shifts green -> orange -> red as hp drops
+    local r = frac > 0.5 and (1 - frac) * 2 or 1
+    local g = frac > 0.5 and 1 or frac * 2
+    love.graphics.setColor(r, g, 0.2, 1)
+    love.graphics.rectangle("fill", barX, 4, barW * frac, 7)
     love.graphics.setColor(1, 1, 1, 1)
-    love.graphics.print("HP", 4, 4)
-    for i = 1, worm.maxHp do
-        local x = 18 + (i - 1) * 5
-        if i <= worm.hp then
-            love.graphics.setColor(0.3, 1, 0.3, 1)
-        else
-            love.graphics.setColor(1, 1, 1, 0.2)
-        end
-        love.graphics.rectangle("fill", x, 5, 3, 5)
-    end
+    love.graphics.rectangle("line", barX + 0.5, 4.5, barW - 1, 6)
+    love.graphics.print(string.format("%d/%d", math.max(0, math.floor(worm.hp)), worm.maxHp), barX + barW + 4, 4)
 
     love.graphics.setColor(1, 1, 1, 1)
     love.graphics.print(string.format("D%02d/%02d", Progress.currentDungeon, Progress.total()), GAME_W - 50, 4)

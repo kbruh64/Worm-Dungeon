@@ -5,14 +5,14 @@ Enemy.__index = Enemy
 
 -- hpMul scales the dungeon's base HP; ability marks special behavior.
 local archetypes = {
-    bit      = { w = 8,  h = 8,  speed = 32, hpMul = 1.5, color = {1, 0.4, 0.4}, contact = 1 },
-    byte     = { w = 12, h = 12, speed = 42, hpMul = 2.5, color = {1, 0.6, 0.3}, contact = 1, ability = "dash" },
-    packet   = { w = 12, h = 8,  speed = 70, hpMul = 2,   color = {0.5, 0.9, 1}, contact = 1, ability = "dash" },
-    daemon   = { w = 14, h = 14, speed = 22, hpMul = 2.5, color = {0.8, 0.4, 1}, contact = 1, ranged = true, ability = "burst" },
-    firewall = { w = 18, h = 18, speed = 26, hpMul = 4,   color = {1, 0.5, 0.2}, contact = 1, ability = "shield" },
-    virus    = { w = 12, h = 12, speed = 48, hpMul = 3,   color = {0.4, 1, 0.6}, contact = 1, splits = true, ability = "heal" },
-    kernel   = { w = 20, h = 20, speed = 34, hpMul = 4.5, color = {1, 0.9, 0.5}, contact = 2, ability = "jump" },
-    root     = { w = 32, h = 28, speed = 46, hpMul = 6,   color = {1, 0.3, 0.6}, contact = 2, ability = "boss" },
+    bit      = { w = 8,  h = 8,  speed = 32, hpMul = 1.5, color = {1, 0.4, 0.4}, contact = 6 },
+    byte     = { w = 12, h = 12, speed = 42, hpMul = 2.5, color = {1, 0.6, 0.3}, contact = 8, ability = "dash" },
+    packet   = { w = 12, h = 8,  speed = 70, hpMul = 2,   color = {0.5, 0.9, 1}, contact = 7, ability = "dash" },
+    daemon   = { w = 14, h = 14, speed = 22, hpMul = 2.5, color = {0.8, 0.4, 1}, contact = 8, ranged = true, ability = "burst" },
+    firewall = { w = 18, h = 18, speed = 26, hpMul = 4,   color = {1, 0.5, 0.2}, contact = 10, ability = "shield" },
+    virus    = { w = 12, h = 12, speed = 48, hpMul = 3,   color = {0.4, 1, 0.6}, contact = 8, splits = true, ability = "heal" },
+    kernel   = { w = 20, h = 20, speed = 34, hpMul = 4.5, color = {1, 0.9, 0.5}, contact = 14, ability = "jump" },
+    root     = { w = 32, h = 28, speed = 46, hpMul = 6,   color = {1, 0.3, 0.6}, contact = 18, ability = "boss" },
 }
 
 function Enemy.new(x, y, arch, hpScale)
@@ -36,7 +36,23 @@ function Enemy.new(x, y, arch, hpScale)
         healGlow = 0,
         sinceHit = 99,
         hurtCd = 0,
+        kbX = 0, kbY = 0,
+        poisonTime = 0, poisonDmg = 0, poisonTick = 0,
     }, Enemy)
+end
+
+function Enemy:applyKnockback(fromX, fromY, force)
+    local dx, dy = cx(self) - fromX, cy(self) - fromY
+    local d = math.sqrt(dx * dx + dy * dy)
+    if d < 0.1 then dx, dy, d = 1, 0, 1 end
+    self.kbX = self.kbX + (dx / d) * force
+    self.kbY = self.kbY + (dy / d) * force
+end
+
+function Enemy:applyPoison(dmg, time)
+    self.poisonDmg = dmg
+    self.poisonTime = time
+    self.poisonTick = 0
 end
 
 function Enemy:rect() return self.x, self.y, self.w, self.h end
@@ -45,7 +61,7 @@ local function cx(self) return self.x + self.w / 2 end
 local function cy(self) return self.y + self.h / 2 end
 
 function Enemy:damage(n)
-    if self.hurtCd > 0 then return end
+    if self.hurtCd > 0 then return false end
     self.hurtCd = 0.25
     self.sinceHit = 0
     if self.shieldTimer > 0 then
@@ -53,7 +69,7 @@ function Enemy:damage(n)
         self.hitFlash = 0.12
         FX.spark(cx(self), cy(self), {0.5, 0.8, 1}, 5, 50, 0.25)
         self.shieldTimer = self.shieldTimer - 0.4
-        return
+        return false
     end
     self.hp = self.hp - n
     self.hitFlash = 0.12
@@ -65,6 +81,7 @@ function Enemy:damage(n)
         FX.spark(cx(self), cy(self), {1, 1, 1}, 6, 140, 0.3)
         FX.shakeFor(0.18, 1.5)
     end
+    return true
 end
 
 -- ability handlers return true if they took over movement this frame
@@ -175,7 +192,7 @@ local function abilityBurst(self, dt, worm, addProjectile)
             addProjectile({
                 x = cx(self), y = cy(self),
                 vx = math.cos(a) * 48, vy = math.sin(a) * 48,
-                life = 2.2, damage = 1, color = self.color,
+                life = 2.2, damage = 5, color = self.color,
             })
         end
     end
@@ -202,6 +219,30 @@ function Enemy:update(dt, worm, addEnemy, addProjectile, enemies)
     self.shieldTimer = math.max(0, self.shieldTimer - dt)
     self.sinceHit = self.sinceHit + dt
     self.hurtCd = math.max(0, self.hurtCd - dt)
+
+    -- knockback impulse (decays quickly)
+    if self.kbX ~= 0 or self.kbY ~= 0 then
+        self.x = self.x + self.kbX * dt
+        self.y = self.y + self.kbY * dt
+        self.kbX = self.kbX * 0.82
+        self.kbY = self.kbY * 0.82
+        if math.abs(self.kbX) < 2 and math.abs(self.kbY) < 2 then self.kbX, self.kbY = 0, 0 end
+    end
+
+    -- poison damage-over-time (ticks ~3x/sec, ignores hurt cooldown)
+    if self.poisonTime > 0 then
+        self.poisonTime = self.poisonTime - dt
+        self.poisonTick = self.poisonTick - dt
+        if self.poisonTick <= 0 then
+            self.poisonTick = 0.33
+            self.hp = self.hp - self.poisonDmg
+            FX.spark(cx(self), cy(self), {0.4, 1, 0.3}, 3, 30, 0.3)
+            if self.hp <= 0 and not self.dead then
+                self.dead = true
+                FX.spark(cx(self), cy(self), {0.4, 1, 0.3}, 14, 110, 0.5)
+            end
+        end
+    end
 
     -- RAGE passive: below 35% HP, move faster and act more often
     self.raging = self.hp / self.maxHp < 0.35
@@ -242,7 +283,7 @@ function Enemy:update(dt, worm, addEnemy, addProjectile, enemies)
                 addProjectile({
                     x = cx(self), y = cy(self),
                     vx = (dx / d) * 65, vy = (dy / d) * 65,
-                    life = 3, damage = 1, color = self.color,
+                    life = 3, damage = 6, color = self.color,
                 })
             end
         elseif d > 0.1 then
@@ -266,6 +307,9 @@ end
 local function setBodyColor(self)
     if self.hitFlash > 0 then
         love.graphics.setColor(1, 1, 1, 1)
+    elseif self.poisonTime and self.poisonTime > 0 then
+        local p = 0.6 + 0.4 * math.sin(self.spinT * 10)
+        love.graphics.setColor(self.color[1] * 0.5, self.color[2] * 0.6 + 0.4 * p, self.color[3] * 0.5, 1)
     elseif self.raging then
         -- pulsing red-hot tint when enraged
         local p = 0.5 + 0.5 * math.sin(self.spinT * 12)

@@ -20,7 +20,7 @@ function Worm.new(x, y)
         x = x, y = y, w = 3, h = 3,
         dir = 1,
         aimAngle = 0,
-        hp = 10, maxHp = 10,
+        hp = 100, maxHp = 100,
         attack = nil,
         attackTimer = 0,
         atkCd = 0,
@@ -187,35 +187,52 @@ function Worm:draw()
             love.graphics.circle("line", hb.cx, hb.cy, r - 4)
         elseif hb.shape == "beam" then
             local cx, cy = self:centerX(), self:centerY()
-            local ex = cx + math.cos(self.aimAngle) * def.reach
-            local ey = cy + math.sin(self.aimAngle) * def.reach
+            local len = def.reach * (0.6 + prog * 0.4)  -- beam extends as it fires
+            local ex = cx + math.cos(self.aimAngle) * len
+            local ey = cy + math.sin(self.aimAngle) * len
+            -- outer glow
+            love.graphics.setColor(def.color[1], def.color[2], def.color[3], alpha * 0.5)
+            love.graphics.setLineWidth(5)
+            love.graphics.line(cx, cy, ex, ey)
+            love.graphics.setColor(def.color[1], def.color[2], def.color[3], alpha)
             love.graphics.setLineWidth(3)
             love.graphics.line(cx, cy, ex, ey)
+            -- white hot core
             love.graphics.setColor(1, 1, 1, alpha)
             love.graphics.setLineWidth(1)
             love.graphics.line(cx, cy, ex, ey)
+            -- muzzle flash
+            love.graphics.circle("fill", cx, cy, 2 + math.sin(prog * math.pi) * 2)
+            love.graphics.setLineWidth(1)
         else
-            -- angled slash arc along aim
+            -- angled slash arc(s) along aim
             local cx, cy = self:centerX(), self:centerY()
-            local ax = math.cos(self.aimAngle)
-            local ay = math.sin(self.aimAngle)
-            local px2 = -ay
-            local py2 = ax
+            local ax, ay = math.cos(self.aimAngle), math.sin(self.aimAngle)
+            local nx, ny = -ay, ax
             local reach = def.reach
-            for i = 0, reach, 2 do
-                local t = i / reach
-                local off = math.sin(t * math.pi) * 6 * (1 - prog * 0.5)
-                local x = cx + ax * i + px2 * off
-                local y = cy + ay * i + py2 * off
-                love.graphics.rectangle("fill", math.floor(x), math.floor(y), 2, 2)
+            local arcs = def.twin and { 1, -1 } or { 1 }
+            for _, side in ipairs(arcs) do
+                love.graphics.setColor(def.color[1], def.color[2], def.color[3], alpha)
+                for i = 0, reach, 2 do
+                    local t = i / reach
+                    -- arc sweeps from one side to the other over the swing
+                    local sweep = math.sin(t * math.pi) * 8 * side
+                    local swing = (prog - 0.5) * 6 * side
+                    local off = sweep + swing
+                    local x = cx + ax * i + nx * off
+                    local y = cy + ay * i + ny * off
+                    love.graphics.rectangle("fill", math.floor(x), math.floor(y), 2, 2)
+                end
+                love.graphics.setColor(1, 1, 1, alpha * 0.8)
+                for i = 0, reach, 4 do
+                    local t = i / reach
+                    local off = math.sin(t * math.pi) * 8 * side + (prog - 0.5) * 6 * side
+                    love.graphics.rectangle("fill", math.floor(cx + ax * i + nx * off), math.floor(cy + ay * i + ny * off), 1, 1)
+                end
             end
-            love.graphics.setColor(1, 1, 1, alpha * 0.7)
-            for i = 0, reach, 4 do
-                local t = i / reach
-                local off = math.sin(t * math.pi) * 6 * (1 - prog * 0.5)
-                local x = cx + ax * i + px2 * off
-                local y = cy + ay * i + py2 * off
-                love.graphics.rectangle("fill", math.floor(x), math.floor(y), 1, 1)
+            -- poison weapons leave drifting green motes
+            if def.dot and math.random() < 0.6 then
+                FX.dust(cx + ax * reach * 0.6, cy + ay * reach * 0.6, {0.4, 1, 0.3}, 1)
             end
         end
     end

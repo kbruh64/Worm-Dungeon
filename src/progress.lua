@@ -57,7 +57,7 @@ function Progress.advance() Progress.currentDungeon = Progress.currentDungeon + 
 -- ---- roguelike rewards ----
 
 local STAT_REWARDS = {
-    { kind = "hp",    label = "+2 MAX HP",     apply = function() Progress.maxHpBonus = Progress.maxHpBonus + 2 end },
+    { kind = "hp",    label = "+25 MAX HP",    apply = function() Progress.maxHpBonus = Progress.maxHpBonus + 25 end },
     { kind = "heal",  label = "FULL HEAL",     apply = function() Progress._wantHeal = true end },
     { kind = "dmg",   label = "+1 DAMAGE",     apply = function() Progress.dmgBonus = Progress.dmgBonus + 1 end },
     { kind = "speed", label = "+10% SPEED",    apply = function() Progress.speedBonus = Progress.speedBonus + 0.1 end },

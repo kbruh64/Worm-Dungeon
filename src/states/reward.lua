@@ -69,9 +69,28 @@ function Reward:draw()
         love.graphics.printf(tostring(i), x + 2, y + 2, cardW - 4, "left")
     end
 
+    -- description panel for the focused choice
+    local cur = choices[sel]
+    if cur then
+        local desc
+        if cur.kind == "weapon" then
+            local def = Weapons.get(cur.weapon)
+            desc = (def.desc or "") .. "\nDMG " .. def.dmg
+                .. (def.knock and ("  KNOCK " .. def.knock) or "")
+                .. (def.dot and ("  POISON " .. def.dot.dmg .. "/s") or "")
+        elseif cur.kind == "hp" then desc = "Raise your maximum health permanently."
+        elseif cur.kind == "heal" then desc = "Instantly restore all lost health."
+        elseif cur.kind == "dmg" then desc = "All attacks deal +1 damage from now on."
+        elseif cur.kind == "speed" then desc = "Move faster. Stacks for the whole run."
+        end
+        love.graphics.setFont(Fonts.small)
+        love.graphics.setColor(1, 1, 1, 0.85)
+        love.graphics.printf(desc or "", 16, 138, GAME_W - 32, "center")
+    end
+
     love.graphics.setFont(Fonts.small)
     love.graphics.setColor(1, 1, 1, 0.4 + 0.4 * math.sin(t * 3))
-    love.graphics.printf("A / D or 1-3 to pick, ENTER to confirm", 0, GAME_H - 14, GAME_W, "center")
+    love.graphics.printf("A / D or 1-3 to pick, ENTER to confirm", 0, GAME_H - 12, GAME_W, "center")
 end
 
 local function confirm()
