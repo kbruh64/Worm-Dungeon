@@ -15,8 +15,9 @@ function Story:enter(opts)
     if mode == "victory" then
         pages = {
             "The core falls silent.",
-            "The wires cool. The fans still.",
-            "A green worm wriggles free into open air.",
+            "The fans stop. Somewhere, a warranty voids.",
+            "A green worm wriggles free into open air,\nburps once, and asks: was that the tutorial?",
+            "It was not. There is no sequel. Go outside.",
             "-- END --",
         }
     elseif mode == "level" then
@@ -28,11 +29,11 @@ function Story:enter(opts)
         }
     else
         pages = {
-            "A green worm dozed in damp soil.",
-            "A wormhole tore open above the garden\nand pulled it screaming into the wires.",
-            "Inside: 30 sectors of hostile code.",
-            "At the center: THE COMPUTER itself.",
-            "Bite through the defenses, little worm.",
+            "A green worm was minding its own business,\neating dirt like a professional.",
+            "Then a wormhole opened. Naturally.\nIt was labeled DO NOT ENTER, so in it went.",
+            "Inside: 30 sectors of hostile code\nand zero customer support.",
+            "At the center: THE COMPUTER, which has\nopinions about uninvited invertebrates.",
+            "You have no thumbs, no plan, and one job.\nBite everything. Good luck, worm.",
         }
     end
     page = 1
