@@ -141,6 +141,19 @@ local function circleHitsRect(cx, cy, r, rx, ry, rw, rh)
     return dx * dx + dy * dy <= r * r
 end
 
+-- Thick segment vs rect: sample points along the aim segment and test each as
+-- a circle. Used for arc/beam weapons so they hit wherever you aim.
+local function lineHitsRect(hb, rx, ry, rw, rh)
+    local steps = math.max(1, math.floor(hb.reach / 3))
+    for i = 0, steps do
+        local t = (i / steps) * hb.reach
+        if circleHitsRect(hb.cx + hb.dx * t, hb.cy + hb.dy * t, hb.half, rx, ry, rw, rh) then
+            return true
+        end
+    end
+    return false
+end
+
 function Game:update(dt)
     if paused then return end
     if bannerTimer then bannerTimer = math.max(0, bannerTimer - dt); if bannerTimer == 0 then bannerTimer = nil end end
@@ -172,7 +185,7 @@ function Game:update(dt)
             if hb.shape == "radial" then
                 hit = circleHitsRect(hb.cx, hb.cy, hb.radius, e.x, e.y, e.w, e.h)
             else
-                hit = rectsOverlap(hb, { x = e.x, y = e.y, w = e.w, h = e.h })
+                hit = lineHitsRect(hb, e.x, e.y, e.w, e.h)
             end
             if hit then
                 local dmg = hb.damage + Progress.dmgBonus + math.min(2, math.floor(worm.comboCount / 4))

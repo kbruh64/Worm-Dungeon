@@ -304,8 +304,48 @@ end
 
 -- ---- geometric pixel-sprite rendering ----
 
+-- Capture-aware pixel drawing: when `capturing`, sprite pixels are recorded
+-- instead of drawn so we can stamp a clean 1px outline behind every mob.
+local capturing = false
+local captured = {}
+
 local function px(x, y, w, h)
-    love.graphics.rectangle("fill", math.floor(x), math.floor(y), w or 1, h or 1)
+    x, y, w, h = math.floor(x), math.floor(y), w or 1, h or 1
+    if capturing then
+        captured[#captured + 1] = { x, y, w, h }
+    else
+        love.graphics.rectangle("fill", x, y, w, h)
+    end
+end
+
+-- Soft primitives (glows/shadows) skip the capture pass so they aren't outlined.
+local function circle(mode, x, y, r, seg)
+    if capturing then return end
+    love.graphics.circle(mode, x, y, r, seg)
+end
+
+local function ellipse(mode, x, y, rx, ry)
+    if capturing then return end
+    love.graphics.ellipse(mode, x, y, rx, ry)
+end
+
+-- Draw a sprite with a dark outline: capture its solid pixels, stamp them in
+-- black at 4 offsets, then draw the sprite normally on top.
+local OUTLINE_OFFS = { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } }
+local function drawWithOutline(self, fn)
+    capturing = true
+    captured = {}
+    fn(self)
+    capturing = false
+    love.graphics.setColor(0, 0, 0, 0.85)
+    for _, o in ipairs(OUTLINE_OFFS) do
+        local dx, dy = o[1], o[2]
+        for j = 1, #captured do
+            local r = captured[j]
+            love.graphics.rectangle("fill", r[1] + dx, r[2] + dy, r[3], r[4])
+        end
+    end
+    fn(self)
 end
 
 local function setBodyColor(self)
@@ -334,7 +374,7 @@ local sprites = {}
 
 local function drawShadow(self)
     love.graphics.setColor(0, 0, 0, 0.35)
-    love.graphics.ellipse("fill", self.x + self.w / 2, self.y + self.h + 1, self.w / 2.5, 1.5)
+    ellipse("fill", self.x + self.w / 2, self.y + self.h + 1, self.w / 2.5, 1.5)
 end
 
 local function glowEye(cx, cy, color)
@@ -347,20 +387,25 @@ end
 -- bit: tiny pulsing diamond core with glowing eye
 function sprites.bit(self)
     drawShadow(self)
-    local cx, cy = self.x + self.w / 2, self.y + self.h / 2
-    local bob = math.sin(self.bobT) * 0.6
+    local cx = self.x + self.w / 2
+    local cy = self.y + self.h / 2 + math.sin(self.bobT) * 0.6
     setBodyColor(self)
     -- diamond body
-    px(cx - 3, cy - 1 + bob, 6, 2)
-    px(cx - 2, cy - 2 + bob, 4, 1)
-    px(cx - 2, cy + 1 + bob, 4, 1)
-    px(cx - 1, cy - 3 + bob, 2, 1)
-    px(cx - 1, cy + 2 + bob, 2, 1)
-    -- inner shine
-    love.graphics.setColor(1, 1, 1, 0.6)
-    px(cx - 1, cy - 1 + bob, 1, 1)
+    px(cx - 3, cy - 1, 6, 2)
+    px(cx - 2, cy - 2, 4, 1)
+    px(cx - 2, cy + 1, 4, 1)
+    px(cx - 1, cy - 3, 2, 1)
+    px(cx - 1, cy + 2, 2, 1)
+    -- lit facet (upper-left) and shaded facet (lower-right) for crystal volume
+    love.graphics.setColor(shadeColor(self.color, 1.6))
+    px(cx - 2, cy - 1, 2, 1); px(cx - 1, cy - 2, 1, 1)
+    love.graphics.setColor(shadeColor(self.color, 0.5))
+    px(cx, cy + 1, 2, 1); px(cx + 1, cy, 1, 1)
+    -- bright core shine
+    love.graphics.setColor(1, 1, 1, 0.8)
+    px(cx - 1, cy - 1, 1, 1)
     -- glowing eye
-    glowEye(cx, cy + bob, {1, 1, 0.4})
+    glowEye(cx, cy, { 1, 1, 0.4 })
 end
 
 -- byte: cyberpunk robot head with antennas, glowing eyes, jagged mouth, side panels
@@ -439,7 +484,7 @@ function sprites.daemon(self)
     local cx, cy = self.x + self.w / 2, self.y + self.h / 2 + bob
     -- pulsing aura
     love.graphics.setColor(self.color[1], self.color[2], self.color[3], 0.25)
-    love.graphics.circle("fill", cx, cy, 9 + math.sin(self.bobT * 2))
+    circle("fill", cx, cy, 9 + math.sin(self.bobT * 2))
     setBodyColor(self)
     -- horns/spikes
     px(self.x + 1, self.y + bob, 2, 3)
@@ -576,7 +621,7 @@ function sprites.kernel(self)
     -- pulsing aura
     local pulse = 1 + math.sin(self.bobT) * 0.15
     love.graphics.setColor(self.color[1], self.color[2], self.color[3], 0.2)
-    love.graphics.circle("fill", cx, cy, 12 * pulse)
+    circle("fill", cx, cy, 12 * pulse)
     -- outer diamond
     setBodyColor(self)
     for r = 0, 9 do
@@ -625,7 +670,7 @@ function sprites.root(self)
 
     -- menacing aura
     love.graphics.setColor(self.color[1], self.color[2], self.color[3], 0.18)
-    love.graphics.ellipse("fill", x + w / 2, y + h / 2, w / 2 + 3, h / 2 + 2)
+    ellipse("fill", x + w / 2, y + h / 2, w / 2 + 3, h / 2 + 2)
 
     -- crown of spikes
     setBodyColor(self)
@@ -687,8 +732,7 @@ function Enemy:draw()
     love.graphics.setColor(self.color[1], self.color[2], self.color[3], 0.1)
     love.graphics.circle("fill", cx(self), cy(self), self.w * 0.7)
 
-    local draw = sprites[self.arch] or sprites.bit
-    draw(self)
+    drawWithOutline(self, sprites[self.arch] or sprites.bit)
 
     -- heal glow
     if self.healGlow and self.healGlow > 0 then

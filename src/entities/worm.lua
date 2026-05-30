@@ -55,11 +55,15 @@ function Worm:hitbox()
         }
     end
 
+    -- directional weapons (arc/beam) strike along the aim angle, matching the
+    -- on-screen swing/beam — represented as a segment from the worm's center.
     local reach = def.reach
-    local hx = self.dir > 0 and (self.x + self.w) or (self.x - reach)
     return {
-        x = hx, y = self.y - 2, w = reach, h = self.h + 4,
         damage = def.dmg, type = self.attack, shape = def.shape,
+        cx = self:centerX(), cy = self:centerY(),
+        dx = math.cos(self.aimAngle), dy = math.sin(self.aimAngle),
+        reach = reach,
+        half = (def.shape == "beam") and 5 or 8,
     }
 end
 
@@ -199,36 +203,16 @@ function Worm:draw()
             px(pt.x - s / 2, pt.y - s / 2, math.max(1, s - 1), 1)
         end
 
-        -- HEAD: rounded, shaded, with a tracking eye and tiny antennae
-        local cx, cy = math.floor(self:centerX()), math.floor(self:centerY())
-        local dir = self.dir
-        love.graphics.setColor(0.04, 0.16, 0.07, 1)            -- outline
-        px(cx - 4, cy - 3, 8, 7)
-        local function row(ry, half, r, g, b)
-            love.graphics.setColor(r, g, b, 1)
-            px(cx - half, ry, half * 2, 1)
-        end
-        row(cy - 2, 2, 0.32, 0.95, 0.42)
-        row(cy - 1, 3, 0.32, 0.95, 0.42)
-        row(cy,     3, 0.26, 0.86, 0.36)
-        row(cy + 1, 3, 0.20, 0.70, 0.30)
-        row(cy + 2, 2, 0.14, 0.55, 0.24)                       -- belly shadow
-        love.graphics.setColor(0.75, 1, 0.75, 0.9)             -- forehead sheen
-        px(cx - 1, cy - 2, 2, 1)
-        love.graphics.setColor(0.32, 0.95, 0.42, 1)            -- antennae
-        px(cx - 2, cy - 3, 1, 1); px(cx + 1, cy - 3, 1, 1)
-
-        -- big eye toward the front; pupil tracks the aim direction
-        local ex = (dir > 0) and cx or (cx - 3)
-        love.graphics.setColor(1, 1, 1, 1)
-        px(ex, cy - 1, 3, 3)
-        local pdx, pdy = math.cos(self.aimAngle), math.sin(self.aimAngle)
-        local pupx = ex + 1 + ((pdx > 0.3) and 1 or (pdx < -0.3) and -1 or 0)
-        local pupy = cy + ((pdy > 0.3) and 1 or (pdy < -0.3) and -1 or 0)
+        -- head: 4x3 with eye pointing at aim (classic look)
+        local hx = math.floor(self:centerX() - 2)
+        local hy = math.floor(self:centerY() - 1)
+        love.graphics.setColor(0.4, 1, 0.4, 1)
+        love.graphics.rectangle("fill", hx, hy, 4, 3)
+        love.graphics.setColor(0.25, 0.7, 0.25, 1)
+        love.graphics.rectangle("fill", hx, hy + 2, 4, 1)
         love.graphics.setColor(0, 0, 0, 1)
-        px(pupx, pupy, 1, 1)
-        love.graphics.setColor(1, 1, 1, 0.9)                   -- eye shine
-        px(ex, cy - 1, 1, 1)
+        local ex = (self.dir > 0) and (hx + 3) or hx
+        love.graphics.rectangle("fill", ex, hy + 1, 1, 1)
     end
 
     local hb = self:hitbox()
