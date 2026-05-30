@@ -4,6 +4,8 @@ local Progress = require("src.progress")
 local Weapons = require("src.weapons")
 local FX = require("src.fx")
 local Room = require("src.dungeons.room")
+local Audio = require("src.audio")
+local Options = require("src.options")
 
 local Game = {}
 
@@ -15,6 +17,9 @@ local banner, bannerTimer
 local clearTimer
 local camX, camY = 0, 0
 local LIGHT_RADIUS = 66
+local paused = false
+local pauseSel = 1
+local PAUSE_ROWS = Options.count() + 2 -- + RESUME + QUIT TO MENU
 
 local function updateCamera()
     if not worm or not room then return end
@@ -87,6 +92,8 @@ function Game:enter()
     if worm.hp < worm.maxHp then worm.hp = math.min(worm.maxHp, worm.hp + 15) end
     input = {}
     clearTimer = nil
+    paused = false
+    Audio.playMusic(Progress.dungeon().boss and "boss" or "battle")
     FX.reset()
     spawnDungeon()
     local sx, sy = room:spawnPoint()
@@ -114,6 +121,7 @@ local function circleHitsRect(cx, cy, r, rx, ry, rw, rh)
 end
 
 function Game:update(dt)
+    if paused then return end
     if bannerTimer then bannerTimer = math.max(0, bannerTimer - dt); if bannerTimer == 0 then bannerTimer = nil end end
     FX.update(dt)
     room:update(dt)
@@ -147,6 +155,8 @@ function Game:update(dt)
                 local dmg = hb.damage + Progress.dmgBonus + math.min(2, math.floor(worm.comboCount / 4))
                 local landed = e:damage(dmg)
                 if landed then
+                    FX.popup(e.x + e.w / 2 - 2, e.y - 4, dmg, e.dead and {1, 1, 0.5} or {1, 1, 1})
+                    Audio.play(e.dead and "kill" or "hit")
                     local def = Weapons.get(hb.type)
                     if def then
                         if def.knock then e:applyKnockback(worm:centerX(), worm:centerY(), def.knock) end
@@ -202,12 +212,15 @@ function Game:update(dt)
             banner = "CLEARED - HEAD TO EXIT"
             bannerTimer = 1.6
             FX.flashFor(0.15, 0.4, 1, 0.6)
+            Audio.play("clear")
         end
     end
     if room.exitOpen and room:exitHit(worm.x, worm.y, worm.w, worm.h) then
         SM:switch("reward")
     end
 end
+
+local drawPause -- forward declaration (defined after Game:draw)
 
 local function drawHud()
     -- hp bar + numeric readout
@@ -322,16 +335,70 @@ function Game:draw()
         love.graphics.setColor(1, 1, 1, a)
         love.graphics.printf(banner, 0, GAME_H / 2 - 8, GAME_W, "center")
     end
+
+    if paused then drawPause() end
+end
+
+drawPause = function()
+    love.graphics.setColor(0, 0, 0, 0.72)
+    love.graphics.rectangle("fill", 0, 0, GAME_W, GAME_H)
+
+    love.graphics.setFont(Fonts.large)
+    love.graphics.setColor(0.4, 1, 0.6, 1)
+    love.graphics.printf("PAUSED", 0, 18, GAME_W, "center")
+
+    local x, w = 70, 180
+    local y0 = 50
+    Options.draw(x, y0, w, pauseSel, 16)
+
+    -- action rows after the options
+    local actions = { "RESUME", "QUIT TO MENU" }
+    love.graphics.setFont(Fonts.small)
+    for i, label in ipairs(actions) do
+        local idx = Options.count() + i
+        local ry = y0 + (Options.count() + i - 1) * 16
+        local focused = (pauseSel == idx)
+        love.graphics.setColor(1, 1, 1, focused and 1 or 0.45)
+        love.graphics.print((focused and "> " or "  ") .. label, x, ry)
+    end
+
+    love.graphics.setColor(1, 1, 1, 0.5)
+    love.graphics.printf("ESC resume", 0, GAME_H - 12, GAME_W, "center")
+end
+
+local function pauseKey(key)
+    local resumeIdx = Options.count() + 1
+    local quitIdx = Options.count() + 2
+    if key == "escape" then
+        paused = false
+    elseif key == "up" or key == "w" then
+        pauseSel = (pauseSel - 2) % PAUSE_ROWS + 1; Audio.play("move")
+    elseif key == "down" or key == "s" then
+        pauseSel = pauseSel % PAUSE_ROWS + 1; Audio.play("move")
+    elseif key == "left" or key == "a" then
+        if pauseSel <= Options.count() then Options.adjust(pauseSel, -1) end
+    elseif key == "right" or key == "d" then
+        if pauseSel <= Options.count() then Options.adjust(pauseSel, 1) end
+    elseif key == "return" or key == "space" then
+        if pauseSel == resumeIdx then Audio.play("select"); paused = false
+        elseif pauseSel == quitIdx then
+            Audio.play("select"); Progress.reset(); worm = nil; SM:switch("menu")
+        elseif Options.items[pauseSel].kind == "toggle" then
+            Options.adjust(pauseSel, 1)
+        end
+    end
 end
 
 function Game:keypressed(key)
-    if key == "escape" then Progress.reset(); worm = nil; SM:switch("menu"); return end
+    if paused then pauseKey(key); return end
+    if key == "escape" then paused = true; pauseSel = Options.count() + 1; Audio.play("move"); return end
     if key == "space" then worm:dash(); return end
-    if key == "q" then Progress.cycleWeapon(1); return end
-    if key == "e" then Progress.cycleWeapon(-1); return end
+    if key == "q" then Progress.cycleWeapon(1); Audio.play("move"); return end
+    if key == "e" then Progress.cycleWeapon(-1); Audio.play("move"); return end
 end
 
 function Game:mousepressed(gx, gy, button)
+    if paused then return end
     if button == 1 then
         worm:fireWeapon(Progress.equipped)
     elseif button == 2 then
@@ -340,6 +407,7 @@ function Game:mousepressed(gx, gy, button)
 end
 
 function Game:wheelmoved(dx, dy)
+    if paused then return end
     if dy > 0 then Progress.cycleWeapon(-1)
     elseif dy < 0 then Progress.cycleWeapon(1) end
 end

@@ -1,4 +1,5 @@
 local Progress = require("src.progress")
+local Audio = require("src.audio")
 
 local Story = {}
 
@@ -39,6 +40,7 @@ function Story:enter(opts)
     page = 1
     revealed = 0
     timer = 0
+    if mode == "intro" then Audio.playMusic("menu") end
 end
 
 function Story:update(dt)
@@ -81,6 +83,7 @@ function Story:keypressed(key)
             revealed = #pages[page]
             return
         end
+        Audio.play("move")
         page = page + 1
         revealed = 0
         if page > #pages then advance() end

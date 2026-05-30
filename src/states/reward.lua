@@ -1,5 +1,6 @@
 local Progress = require("src.progress")
 local Weapons = require("src.weapons")
+local Audio = require("src.audio")
 
 local Reward = {}
 local choices, sel, t
@@ -94,6 +95,7 @@ function Reward:draw()
 end
 
 local function confirm()
+    Audio.play("pickup")
     Progress.takeReward(choices[sel])
     Progress.advance()
     if Progress.currentDungeon > Progress.total() then
@@ -104,8 +106,8 @@ local function confirm()
 end
 
 function Reward:keypressed(key)
-    if key == "left" or key == "a" then sel = sel - 1; if sel < 1 then sel = #choices end
-    elseif key == "right" or key == "d" then sel = sel + 1; if sel > #choices then sel = 1 end
+    if key == "left" or key == "a" then sel = sel - 1; if sel < 1 then sel = #choices end; Audio.play("move")
+    elseif key == "right" or key == "d" then sel = sel + 1; if sel > #choices then sel = 1 end; Audio.play("move")
     elseif key == "1" or key == "2" or key == "3" then
         local n = tonumber(key)
         if choices[n] then sel = n; confirm() end

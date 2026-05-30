@@ -1,4 +1,5 @@
 local FX = require("src.fx")
+local Audio = require("src.audio")
 
 local Enemy = {}
 Enemy.__index = Enemy
@@ -154,6 +155,7 @@ local function abilityJump(self, dt, worm, d)
             self.jumpState = nil
             FX.ring(cx(self), cy(self), self.color, 16, 18)
             FX.shakeFor(0.25, 2.5)
+            Audio.play("slam")
             -- slam shockwave: hurt worm if close on landing
             local wdx, wdy = worm:centerX() - cx(self), worm:centerY() - cy(self)
             if wdx * wdx + wdy * wdy < 24 * 24 then worm:damage(self.contact) end
@@ -186,6 +188,7 @@ local function abilityBurst(self, dt, worm, addProjectile)
         self.abilityCd = 5.0
         FX.ring(cx(self), cy(self), self.color, 12, 10)
         FX.shakeFor(0.1, 1)
+        Audio.play("shoot")
         local n = 6
         for i = 0, n - 1 do
             local a = (i / n) * math.pi * 2
@@ -280,6 +283,7 @@ function Enemy:update(dt, worm, addEnemy, addProjectile, enemies)
             self.fireTimer = self.fireTimer - dt
             if self.fireTimer <= 0 then
                 self.fireTimer = 2.4
+                Audio.play("shoot")
                 addProjectile({
                     x = cx(self), y = cy(self),
                     vx = (dx / d) * 65, vy = (dy / d) * 65,

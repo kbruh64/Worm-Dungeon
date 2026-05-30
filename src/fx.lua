@@ -1,17 +1,29 @@
 -- Lightweight pixel-art particle + screen-shake system.
 local FX = {
     particles = {},
+    popups = {},
     shake = 0,
     shakeMag = 0,
     flash = 0,
     flashColor = {1, 1, 1, 1},
+    shakeEnabled = true,
 }
 
 function FX.reset()
     FX.particles = {}
+    FX.popups = {}
     FX.shake = 0
     FX.shakeMag = 0
     FX.flash = 0
+end
+
+-- Floating combat text (e.g. damage numbers) that drifts up and fades.
+function FX.popup(x, y, text, color)
+    table.insert(FX.popups, {
+        x = x, y = y, vy = -18,
+        life = 0.6, maxLife = 0.6,
+        text = tostring(text), color = color or {1, 1, 1},
+    })
 end
 
 function FX.shakeFor(dur, mag)
@@ -103,6 +115,16 @@ function FX.update(dt)
             p.vy = p.vy * 0.96
         end
     end
+    for i = #FX.popups, 1, -1 do
+        local p = FX.popups[i]
+        p.life = p.life - dt
+        if p.life <= 0 then
+            table.remove(FX.popups, i)
+        else
+            p.y = p.y + p.vy * dt
+            p.vy = p.vy * 0.9
+        end
+    end
 end
 
 function FX.draw()
@@ -111,6 +133,17 @@ function FX.draw()
         local c = p.color
         love.graphics.setColor(c[1], c[2], c[3], a)
         love.graphics.rectangle("fill", math.floor(p.x), math.floor(p.y), p.size, p.size)
+    end
+    if #FX.popups > 0 and Fonts and Fonts.small then
+        love.graphics.setFont(Fonts.small)
+        for _, p in ipairs(FX.popups) do
+            local a = math.max(0, p.life / p.maxLife)
+            local c = p.color
+            love.graphics.setColor(0, 0, 0, a * 0.8)
+            love.graphics.print(p.text, math.floor(p.x) + 1, math.floor(p.y) + 1)
+            love.graphics.setColor(c[1], c[2], c[3], a)
+            love.graphics.print(p.text, math.floor(p.x), math.floor(p.y))
+        end
     end
 end
 
@@ -123,7 +156,7 @@ function FX.drawOverlay()
 end
 
 function FX.shakeOffset()
-    if FX.shake <= 0 then return 0, 0 end
+    if FX.shake <= 0 or not FX.shakeEnabled then return 0, 0 end
     local m = FX.shakeMag
     return (math.random() - 0.5) * m * 2, (math.random() - 0.5) * m * 2
 end

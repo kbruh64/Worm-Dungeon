@@ -1,7 +1,9 @@
+local Audio = require("src.audio")
+
 local Victory = {}
 local t = 0
 
-function Victory:enter() t = 0 end
+function Victory:enter() t = 0; Audio.playMusic("victory") end
 
 function Victory:update(dt) t = t + dt end
 
@@ -18,6 +20,7 @@ end
 
 function Victory:keypressed(key)
     if key == "return" or key == "space" then
+        Audio.play("select")
         SM:switch("story", { victory = true })
     end
 end

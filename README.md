@@ -16,34 +16,45 @@ Or drag the folder onto `love.exe` on Windows.
 
 ## Controls
 
-| Key            | Action                                  |
-| -------------- | --------------------------------------- |
-| WASD           | Move                                    |
-| Mouse          | Aim                                     |
-| Left click     | Use selected weapon                     |
-| Space          | Dash (i-frames, dashes toward cursor)   |
-| 1–9            | Select hotbar slot                      |
-| Mouse wheel    | Cycle hotbar                            |
-| E              | Open / close inventory                  |
-| Enter          | Confirm (menus)                         |
-| Esc            | Close inventory / back to menu          |
-| F11            | Fullscreen                              |
-
-### Inventory
-
-Press **E** to open. Left-click a weapon in the inventory grid to pick it up, then left-click a hotbar slot to assign it. Right-click a hotbar slot to clear it. New weapons unlocked from dungeon clears are auto-added to your inventory and dropped into the first empty hotbar slot.
+| Key            | Action                                       |
+| -------------- | -------------------------------------------- |
+| WASD           | Move                                         |
+| Mouse          | Aim                                          |
+| Left click     | Use equipped weapon                          |
+| Right click / Space | Dash (i-frames, dashes the way you're moving) |
+| Q / E / Wheel  | Cycle equipped weapon                        |
+| Enter          | Confirm (menus)                              |
+| Esc            | Pause (in game) / back (in menus)            |
+| F11            | Fullscreen                                   |
 
 Chain attacks within 0.6s to build a combo — every two combo hits add +1 damage.
+
+### Pause & Settings
+
+Press **Esc** during a run to pause without losing progress. The pause menu and the
+title-screen **SETTINGS** entry share the same options: music volume, SFX volume,
+fullscreen, screen shake, and CRT glow. Settings persist between sessions.
+
+## Audio
+
+All music and sound effects are **synthesized procedurally at runtime** (chiptune
+oscillators + noise in [src/audio.lua](src/audio.lua)) — the game ships with no audio
+asset files. Tracks switch by context: calm menu theme, driving battle loop, a heavier
+boss loop, and a bright victory jingle.
 
 ## Project layout
 
 ```
-main.lua              entry point, canvas scaling, font loading
+main.lua              entry point, canvas scaling, fonts, CRT vignette
 conf.lua              LÖVE window config
 src/
-  state_machine.lua   menu/story/game/victory manager
+  state_machine.lua   menu/story/game/victory/settings manager
   progress.lua        current dungeon, unlocked attacks, kill count
-  states/             menu, story, game, victory screens
+  settings.lua        persisted options (volume, fullscreen, shake, crt)
+  audio.lua           procedural chiptune music + SFX synthesis
+  options.lua         shared options widget (settings + pause menu)
+  fx.lua              particles, screen shake, damage popups
+  states/             menu, story, game, reward, victory, settings screens
   entities/           worm (player), enemy (8 archetypes)
   dungeons/list.lua   30 dungeons w/ palette + archetype + unlocks
 assets/fonts/         drop Mojangles.ttf here (auto-fallback otherwise)

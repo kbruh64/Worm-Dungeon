@@ -8,14 +8,40 @@ local Story = require("src.states.story")
 local Game = require("src.states.game")
 local Reward = require("src.states.reward")
 local Victory = require("src.states.victory")
+local SettingsState = require("src.states.settings")
+local Settings = require("src.settings")
+local Audio = require("src.audio")
+local FX = require("src.fx")
 
 local canvas
+local vignette
 
 local sm
+
+-- Soft radial edge-darkening drawn over the framebuffer when CRT glow is on.
+local function buildVignette()
+    local data = love.image.newImageData(GAME_W, GAME_H)
+    local cx, cy = GAME_W / 2, GAME_H / 2
+    local maxd = math.sqrt(cx * cx + cy * cy)
+    data:mapPixel(function(x, y)
+        local dx, dy = (x - cx), (y - cy)
+        local d = math.sqrt(dx * dx + dy * dy) / maxd
+        local a = math.max(0, d - 0.45) * 0.95
+        return 0, 0, 0, math.min(0.8, a)
+    end)
+    vignette = love.graphics.newImage(data)
+    vignette:setFilter("nearest", "nearest")
+end
 
 function love.load()
     canvas = love.graphics.newCanvas(GAME_W, GAME_H)
     canvas:setFilter("nearest", "nearest")
+
+    Settings.load()
+    Audio.load()
+    FX.shakeEnabled = Settings.data.shake
+    if Settings.data.fullscreen then love.window.setFullscreen(true) end
+    buildVignette()
 
     local path = "assets/fonts/PressStart2P.ttf"
     local function tryFont(size)
@@ -36,6 +62,7 @@ function love.load()
     sm:register("game", Game)
     sm:register("reward", Reward)
     sm:register("victory", Victory)
+    sm:register("settings", SettingsState)
     sm:switch("menu")
 
     _G.SM = sm
@@ -60,6 +87,10 @@ local function drawScaled()
     love.graphics.setCanvas({ canvas, stencil = true })
     love.graphics.clear(0.04, 0.05, 0.08, 1)
     sm:draw()
+    if Settings.data.crt and vignette then
+        love.graphics.setColor(1, 1, 1, 1)
+        love.graphics.draw(vignette, 0, 0)
+    end
     love.graphics.setCanvas()
 
     local sw, sh = love.graphics.getDimensions()
@@ -77,7 +108,10 @@ end
 
 function love.keypressed(key)
     if key == "f11" then
-        love.window.setFullscreen(not love.window.getFullscreen())
+        local fs = not love.window.getFullscreen()
+        love.window.setFullscreen(fs)
+        Settings.data.fullscreen = fs
+        Settings.save()
         return
     end
     sm:keypressed(key)

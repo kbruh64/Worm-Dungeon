@@ -1,5 +1,6 @@
 local Weapons = require("src.weapons")
 local FX = require("src.fx")
+local Audio = require("src.audio")
 
 local Worm = {}
 Worm.__index = Worm
@@ -20,6 +21,8 @@ function Worm.new(x, y)
         x = x, y = y, w = 3, h = 3,
         dir = 1,
         aimAngle = 0,
+        dashAngle = 0,
+        moveX = 0, moveY = 0,
         hp = 100, maxHp = 100,
         attack = nil,
         attackTimer = 0,
@@ -67,6 +70,7 @@ function Worm:fireWeapon(name)
     self.attack = name
     self.attackTimer = def.dur
     self.atkCd = def.dur + (def.cd or 0.25)
+    Audio.play("swing")
     if self.comboTimer > 0 then
         self.comboCount = self.comboCount + 1
     else
@@ -95,13 +99,21 @@ function Worm:dash()
     if self.dashTimer > 0 or self.attack then return end
     self.dashTimer = DASH_TIME
     self.invuln = math.max(self.invuln, DASH_TIME)
+    -- dash where the worm is heading; fall back to facing if standing still
+    if self.moveX ~= 0 or self.moveY ~= 0 then
+        self.dashAngle = math.atan2(self.moveY, self.moveX)
+    else
+        self.dashAngle = (self.dir >= 0) and 0 or math.pi
+    end
     FX.dust(self:centerX(), self.y + self.h, {0.6, 1, 0.6}, 6)
+    Audio.play("dash")
 end
 
 function Worm:damage(n)
     if self.invuln > 0 then return end
     self.hp = self.hp - n
     self.invuln = INVULN_TIME
+    Audio.play("hurt")
 end
 
 function Worm:aimAt(gx, gy)
@@ -128,11 +140,14 @@ function Worm:update(dt, input, speedBonus)
     if input.down then my = my + 1 end
     if mx ~= 0 and my ~= 0 then mx, my = mx * 0.707, my * 0.707 end
 
+    -- remember current heading so a dash can launch in this direction
+    self.moveX, self.moveY = mx, my
+
     local speed = SPEED * (1 + (speedBonus or 0))
     if self.dashTimer > 0 then
         speed = DASH_SPEED
-        mx = math.cos(self.aimAngle)
-        my = math.sin(self.aimAngle)
+        mx = math.cos(self.dashAngle)
+        my = math.sin(self.dashAngle)
     end
     if self.attack then speed = speed * 0.3 end
 
