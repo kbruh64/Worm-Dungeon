@@ -617,36 +617,63 @@ function sprites.kernel(self)
     end
 end
 
--- root (final boss): wide menacing skull-block
+-- root (final boss): an armored core monolith with a glowing visor & maw
 function sprites.root(self)
+    local x, y, w, h = self.x, self.y, self.w, self.h
+    local t = self.bobT
+    local pulse = 0.55 + 0.45 * math.sin(t * 3)
+
+    -- menacing aura
+    love.graphics.setColor(self.color[1], self.color[2], self.color[3], 0.18)
+    love.graphics.ellipse("fill", x + w / 2, y + h / 2, w / 2 + 3, h / 2 + 2)
+
+    -- crown of spikes
     setBodyColor(self)
-    px(self.x + 2, self.y + 2, self.w - 4, self.h - 4)
-    -- shadow
+    for i = 0, 4 do px(x + 4 + i * 6, y, 2, 4) end
+    love.graphics.setColor(shadeColor(self.color, 1.4))
+    for i = 0, 4 do px(x + 4 + i * 6, y, 1, 3) end
+
+    -- dark outline + main shell
+    love.graphics.setColor(0.1, 0.02, 0.06, 1)
+    px(x, y + 2, w, h - 2)
+    setBodyColor(self)
+    px(x + 2, y + 4, w - 4, h - 6)
+    -- top highlight + bottom/right shadow for volume
+    love.graphics.setColor(shadeColor(self.color, 1.5))
+    px(x + 2, y + 4, w - 4, 1)
     love.graphics.setColor(shadeColor(self.color, 0.4))
-    px(self.x + 2, self.y + self.h - 4, self.w - 4, 2)
-    px(self.x + self.w - 4, self.y + 2, 2, self.h - 4)
-    -- circuit details
-    love.graphics.setColor(shadeColor(self.color, 1.6))
-    for i = 0, 3 do
-        px(self.x + 4 + i * 6, self.y + 4, 4, 1)
-        px(self.x + 4 + i * 6, self.y + self.h - 5, 4, 1)
-    end
-    -- glowing eyes
+    px(x + 2, y + h - 3, w - 4, 1); px(x + w - 3, y + 4, 1, h - 6)
+
+    -- side pylons
+    love.graphics.setColor(shadeColor(self.color, 0.7))
+    px(x, y + 8, 2, h - 12); px(x + w - 2, y + 8, 2, h - 12)
+
+    -- circuit etching
+    love.graphics.setColor(shadeColor(self.color, 1.7))
+    for i = 0, 3 do px(x + 5 + i * 6, y + 6, 4, 1) end
+    px(x + 6, y + 6, 1, h - 14); px(x + w - 7, y + 6, 1, h - 14)
+
+    -- glowing visor with tracking light
     love.graphics.setColor(0, 0, 0, 1)
-    px(self.x + 5, self.y + 8, 6, 4)
-    px(self.x + self.w - 11, self.y + 8, 6, 4)
-    love.graphics.setColor(1, 0.2, 0.4, 1)
-    local pulse = math.floor(self.bobT) % 2
-    px(self.x + 7 - pulse, self.y + 9, 2, 2)
-    px(self.x + self.w - 9 - pulse, self.y + 9, 2, 2)
-    -- jagged mouth
+    px(x + 5, y + 10, w - 10, 5)
+    love.graphics.setColor(1, 0.2, 0.4, pulse)
+    px(x + 6, y + 11, w - 12, 3)
+    local look = math.floor(math.sin(t) * 2)
+    love.graphics.setColor(1, 0.85, 0.95, pulse)
+    px(x + w / 2 - 4 + look, y + 12, 2, 1); px(x + w / 2 + 2 + look, y + 12, 2, 1)
+
+    -- jagged maw
     love.graphics.setColor(0, 0, 0, 1)
-    px(self.x + 6, self.y + self.h - 9, self.w - 12, 3)
+    px(x + 6, y + h - 8, w - 12, 3)
     love.graphics.setColor(1, 1, 1, 1)
     for i = 0, 4 do
-        px(self.x + 7 + i * 4, self.y + self.h - 9, 2, 1)
-        px(self.x + 9 + i * 4, self.y + self.h - 7, 2, 1)
+        px(x + 7 + i * 4, y + h - 8, 2, 1)
+        px(x + 9 + i * 4, y + h - 6, 2, 1)
     end
+
+    -- pulsing core gem
+    love.graphics.setColor(1, 0.9, 0.4, pulse)
+    px(x + w / 2 - 1, y + h - 12, 2, 2)
 end
 
 function Enemy:draw()
@@ -655,6 +682,10 @@ function Enemy:draw()
         love.graphics.setColor(1, 0.2, 0.2, 0.4 + 0.4 * math.sin(self.bobT * 6))
         love.graphics.circle("line", cx(self), cy(self) + self.h / 2, 8)
     end
+
+    -- soft colored under-glow so enemies pop against the dark floor
+    love.graphics.setColor(self.color[1], self.color[2], self.color[3], 0.1)
+    love.graphics.circle("fill", cx(self), cy(self), self.w * 0.7)
 
     local draw = sprites[self.arch] or sprites.bit
     draw(self)

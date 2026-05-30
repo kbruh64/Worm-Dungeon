@@ -35,6 +35,14 @@ Press **Esc** during a run to pause without losing progress. The pause menu and 
 title-screen **SETTINGS** entry share the same options: music volume, SFX volume,
 fullscreen, screen shake, and CRT glow. Settings persist between sessions.
 
+### Characters
+
+Sectors are dotted with harmless passive characters — a chat-bubble assistant, a
+stray cursor, a floppy disk, a debug bug — hiding in the dark. Walk up to one and it
+pops a speech bubble with a system tip or a (deliberately bad) joke. They never fight;
+they're just there to keep you company on the way down. See
+[src/entities/npc.lua](src/entities/npc.lua).
+
 ## Audio
 
 All music and sound effects are **synthesized procedurally at runtime** (chiptune

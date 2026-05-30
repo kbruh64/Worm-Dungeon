@@ -160,32 +160,75 @@ end
 
 function Worm:draw()
     local flicker = (self.invuln > 0 and math.floor(self.invuln * 20) % 2 == 0)
+    local function px(x, y, w, h) love.graphics.rectangle("fill", math.floor(x), math.floor(y), w or 1, h or 1) end
 
     -- body: sample trail points at fixed time spacing back from head
     if not flicker then
-        for i = BODY_LEN, 1, -1 do
+        local pts = {}
+        for i = 1, BODY_LEN do
             local targetT = self.time - i * BODY_SPACING
             local pt = self.trail[1]
             for _, p in ipairs(self.trail) do
                 if p.t <= targetT then pt = p; break end
             end
-            local fade = i / BODY_LEN
-            local size = (i <= 2) and 3 or (i <= 5) and 2 or 1
-            local g = 0.85 - fade * 0.4
-            love.graphics.setColor(0.15, g, 0.2, 1)
-            love.graphics.rectangle("fill", math.floor(pt.x - size / 2), math.floor(pt.y - size / 2), size, size)
+            pts[i] = pt
         end
 
-        -- head: 4x3 with eye pointing at aim
-        local hx = math.floor(self:centerX() - 2)
-        local hy = math.floor(self:centerY() - 1)
-        love.graphics.setColor(0.4, 1, 0.4, 1)
-        love.graphics.rectangle("fill", hx, hy, 4, 3)
-        love.graphics.setColor(0.25, 0.7, 0.25, 1)
-        love.graphics.rectangle("fill", hx, hy + 2, 4, 1)
+        local function seg(i) return (i <= 3) and 3 or (i <= 6) and 2 or 1 end
+
+        -- soft ground shadow beneath the body
+        love.graphics.setColor(0, 0, 0, 0.25)
+        for i = 1, BODY_LEN do px(pts[i].x - 1, pts[i].y + 2, 3, 1) end
+
+        -- dark outline pass (each segment a touch larger)
+        love.graphics.setColor(0.04, 0.16, 0.07, 1)
+        for i = BODY_LEN, 1, -1 do
+            local s = seg(i) + 1
+            px(pts[i].x - s / 2, pts[i].y - s / 2, s, s)
+        end
+
+        -- body fill: bright at the head, fading to a deep green tail
+        for i = BODY_LEN, 1, -1 do
+            local pt = pts[i]
+            local fade = i / BODY_LEN
+            local s = seg(i)
+            local g = 0.95 - fade * 0.55
+            love.graphics.setColor(0.18, g, 0.28 - fade * 0.1, 1)
+            px(pt.x - s / 2, pt.y - s / 2, s, s)
+            love.graphics.setColor(0.55, math.min(1, g + 0.2), 0.5, 0.7) -- top sheen
+            px(pt.x - s / 2, pt.y - s / 2, math.max(1, s - 1), 1)
+        end
+
+        -- HEAD: rounded, shaded, with a tracking eye and tiny antennae
+        local cx, cy = math.floor(self:centerX()), math.floor(self:centerY())
+        local dir = self.dir
+        love.graphics.setColor(0.04, 0.16, 0.07, 1)            -- outline
+        px(cx - 4, cy - 3, 8, 7)
+        local function row(ry, half, r, g, b)
+            love.graphics.setColor(r, g, b, 1)
+            px(cx - half, ry, half * 2, 1)
+        end
+        row(cy - 2, 2, 0.32, 0.95, 0.42)
+        row(cy - 1, 3, 0.32, 0.95, 0.42)
+        row(cy,     3, 0.26, 0.86, 0.36)
+        row(cy + 1, 3, 0.20, 0.70, 0.30)
+        row(cy + 2, 2, 0.14, 0.55, 0.24)                       -- belly shadow
+        love.graphics.setColor(0.75, 1, 0.75, 0.9)             -- forehead sheen
+        px(cx - 1, cy - 2, 2, 1)
+        love.graphics.setColor(0.32, 0.95, 0.42, 1)            -- antennae
+        px(cx - 2, cy - 3, 1, 1); px(cx + 1, cy - 3, 1, 1)
+
+        -- big eye toward the front; pupil tracks the aim direction
+        local ex = (dir > 0) and cx or (cx - 3)
+        love.graphics.setColor(1, 1, 1, 1)
+        px(ex, cy - 1, 3, 3)
+        local pdx, pdy = math.cos(self.aimAngle), math.sin(self.aimAngle)
+        local pupx = ex + 1 + ((pdx > 0.3) and 1 or (pdx < -0.3) and -1 or 0)
+        local pupy = cy + ((pdy > 0.3) and 1 or (pdy < -0.3) and -1 or 0)
         love.graphics.setColor(0, 0, 0, 1)
-        local ex = (self.dir > 0) and (hx + 3) or hx
-        love.graphics.rectangle("fill", ex, hy + 1, 1, 1)
+        px(pupx, pupy, 1, 1)
+        love.graphics.setColor(1, 1, 1, 0.9)                   -- eye shine
+        px(ex, cy - 1, 1, 1)
     end
 
     local hb = self:hitbox()

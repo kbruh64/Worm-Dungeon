@@ -1,5 +1,6 @@
 local Worm = require("src.entities.worm")
 local Enemy = require("src.entities.enemy")
+local Npc = require("src.entities.npc")
 local Progress = require("src.progress")
 local Weapons = require("src.weapons")
 local FX = require("src.fx")
@@ -10,7 +11,7 @@ local Options = require("src.options")
 local Game = {}
 
 local worm
-local enemies, projectiles
+local enemies, projectiles, npcs
 local room
 local input
 local banner, bannerTimer
@@ -65,6 +66,25 @@ local function spawnWave()
     end
 end
 
+local function spawnNpcs(d)
+    npcs = {}
+    if d.boss then return end
+    local count = ({ 0, 1, 1, 2 })[math.random(1, 4)]
+    local x1, y1, x2, y2 = room:bounds()
+    local cxr, cyr = room.ROOM_W / 2, room.ROOM_H / 2
+    for _ = 1, count do
+        local tries, nx, ny = 0, nil, nil
+        repeat
+            tries = tries + 1
+            nx = x1 + 20 + math.random(0, math.floor((x2 - x1 - 60) / 8)) * 8
+            ny = y1 + 16 + math.random(0, math.floor((y2 - y1 - 44) / 8)) * 8
+        until (fits(nx, ny, 12, 12)
+               and (nx - cxr) ^ 2 + (ny - cyr) ^ 2 > 44 * 44
+               and nx < x2 - 36) or tries > 30
+        table.insert(npcs, Npc.new(nx, ny))
+    end
+end
+
 local function spawnDungeon()
     local d = Progress.dungeon()
     room = Room.new(d, Progress.currentDungeon * 1009 + 17)
@@ -77,6 +97,7 @@ local function spawnDungeon()
     currentWave = 1
     waveDelay = nil
     spawnWave()
+    spawnNpcs(d)
     banner = d.name
     bannerTimer = 2.0
 end
@@ -133,6 +154,8 @@ function Game:update(dt)
     worm:update(dt, input, Progress.speedBonus)
     worm.x, worm.y = room:resolveCollision(worm.x, worm.y, worm.w, worm.h, prevX, prevY)
     updateCamera()
+
+    for _, npc in ipairs(npcs) do npc:update(dt, worm) end
 
     local hb = worm:hitbox()
     for _, e in ipairs(enemies) do
@@ -288,16 +311,29 @@ function Game:draw()
     room:drawObstacles()
     room:drawExit()
 
+    for _, npc in ipairs(npcs) do npc:draw() end
     for _, e in ipairs(enemies) do e:draw() end
     for _, pr in ipairs(projectiles) do
-        local c = pr.color or {1, 0.5, 1}
+        local c = pr.color or { 1, 0.5, 1 }
+        local x, y = math.floor(pr.x), math.floor(pr.y)
+        -- motion trail behind the orb
+        love.graphics.setColor(c[1], c[2], c[3], 0.3)
+        love.graphics.rectangle("fill", math.floor(x - (pr.vx or 0) * 0.02) - 1,
+                                        math.floor(y - (pr.vy or 0) * 0.02) - 1, 2, 2)
+        -- soft outer glow
+        love.graphics.setColor(c[1], c[2], c[3], 0.25)
+        love.graphics.circle("fill", x, y, 4)
+        -- diamond body
         love.graphics.setColor(c[1], c[2], c[3], 1)
-        love.graphics.rectangle("fill", math.floor(pr.x) - 2, math.floor(pr.y) - 2, 4, 4)
+        love.graphics.rectangle("fill", x - 2, y - 1, 4, 2)
+        love.graphics.rectangle("fill", x - 1, y - 2, 2, 4)
+        -- white-hot core
         love.graphics.setColor(1, 1, 1, 1)
-        love.graphics.rectangle("fill", math.floor(pr.x) - 1, math.floor(pr.y) - 1, 2, 2)
+        love.graphics.rectangle("fill", x - 1, y - 1, 2, 2)
     end
     worm:draw()
     FX.draw()
+    for _, npc in ipairs(npcs) do npc:drawBubble() end
 
     love.graphics.pop()
 
