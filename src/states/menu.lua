@@ -1,14 +1,20 @@
 local Audio = require("src.audio")
+local Profile = require("src.profile")
+local Quests = require("src.quests")
+local UI = require("src.ui")
 
 local Menu = {}
 
-local items = { "START", "SETTINGS", "QUIT" }
+local items = { "START", "SHOP", "QUESTS", "SETTINGS", "QUIT" }
 local sel = 1
 local t = 0
 
 function Menu:enter()
     sel = 1
     Audio.playMusic("menu")
+    -- reconcile any quests completed during the last run so coins are awarded
+    -- even if the run ended in a death rather than a sector clear.
+    Quests.check()
 end
 
 function Menu:update(dt)
@@ -49,24 +55,28 @@ function Menu:draw()
 
     drawWorm()
 
+    -- coin balance, top-right
+    UI.coins(GAME_W - 52, 6, Profile.data.coins)
+
     love.graphics.setFont(Fonts.medium)
     for i, item in ipairs(items) do
+        local y = 84 + (i - 1) * 16
         if i == sel then
             love.graphics.setColor(1, 1, 1, 1)
             local arrow = "> " .. item .. " <"
             local w = Fonts.medium:getWidth(arrow)
-            love.graphics.print(arrow, math.floor((GAME_W - w) / 2), 96 + (i - 1) * 18)
+            love.graphics.print(arrow, math.floor((GAME_W - w) / 2), y)
         else
             love.graphics.setColor(1, 1, 1, 0.4)
             local w = Fonts.medium:getWidth(item)
-            love.graphics.print(item, math.floor((GAME_W - w) / 2), 96 + (i - 1) * 18)
+            love.graphics.print(item, math.floor((GAME_W - w) / 2), y)
         end
     end
 
     love.graphics.setFont(Fonts.small)
     love.graphics.setColor(1, 1, 1, 0.4 + 0.4 * math.sin(t * 2))
     local hint = "ENTER to select"
-    love.graphics.print(hint, math.floor((GAME_W - Fonts.small:getWidth(hint)) / 2), GAME_H - 16)
+    love.graphics.print(hint, math.floor((GAME_W - Fonts.small:getWidth(hint)) / 2), GAME_H - 9)
 end
 
 function Menu:keypressed(key)
@@ -78,6 +88,10 @@ function Menu:keypressed(key)
             local Progress = require("src.progress")
             Progress.reset()
             SM:switch("story")
+        elseif items[sel] == "SHOP" then
+            SM:switch("shop")
+        elseif items[sel] == "QUESTS" then
+            SM:switch("quests")
         elseif items[sel] == "SETTINGS" then
             SM:switch("settings")
         elseif items[sel] == "QUIT" then love.event.quit() end

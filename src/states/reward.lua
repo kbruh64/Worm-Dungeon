@@ -1,14 +1,24 @@
 local Progress = require("src.progress")
 local Weapons = require("src.weapons")
 local Audio = require("src.audio")
+local Profile = require("src.profile")
+local Quests = require("src.quests")
+local UI = require("src.ui")
 
 local Reward = {}
 local choices, sel, t
+local questCoins, questNames
 
 function Reward:enter()
     choices = Progress.rollRewards()
     sel = 1
     t = 0
+    -- pay out any quests the just-cleared sector completed
+    questCoins, questNames = 0, nil
+    for _, q in ipairs(Quests.check()) do
+        questCoins = questCoins + q.reward
+        questNames = (questNames and (questNames .. ", ") or "") .. q.name
+    end
 end
 
 function Reward:update(dt) t = t + dt end
@@ -20,9 +30,18 @@ function Reward:draw()
     love.graphics.setColor(1, 1, 1, 1)
     love.graphics.printf("CHOOSE A REWARD", 0, 18, GAME_W, "center")
 
+    UI.coins(GAME_W - 52, 6, Profile.data.coins)
+
     love.graphics.setFont(Fonts.small)
     love.graphics.setColor(1, 1, 1, 0.6)
     love.graphics.printf("SECTOR " .. string.format("%02d", Progress.currentDungeon) .. " CLEARED", 0, 36, GAME_W, "center")
+
+    -- quest payouts earned by clearing this sector
+    if questCoins > 0 then
+        love.graphics.setColor(1, 0.9, 0.4, 0.7 + 0.3 * math.sin(t * 5))
+        love.graphics.printf("QUEST COMPLETE  +" .. questCoins .. "c  " .. (questNames or ""),
+                             0, 48, GAME_W, "center")
+    end
 
     local cardW, cardH = 80, 70
     local gap = 8

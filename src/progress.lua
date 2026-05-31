@@ -1,5 +1,7 @@
 local Dungeons = require("src.dungeons.list")
 local Weapons = require("src.weapons")
+local Profile = require("src.profile")
+local Armour = require("src.armour")
 
 local Progress = {
     currentDungeon = 1,
@@ -8,6 +10,7 @@ local Progress = {
     dmgBonus = 0,
     maxHpBonus = 0,
     speedBonus = 0,
+    damageReduction = 0,   -- fraction of incoming damage ignored (from armour)
     kills = 0,
 }
 
@@ -19,11 +22,27 @@ end
 function Progress.reset()
     Progress.currentDungeon = 1
     Progress.weapons = { "slash", "punch" }
+    -- weapons bought in the shop are part of every run's loadout
+    for _, name in ipairs(Profile.data.weapons) do
+        if not has(Progress.weapons, name) then table.insert(Progress.weapons, name) end
+    end
     Progress.equipped = "slash"
     Progress.dmgBonus = 0
     Progress.maxHpBonus = 0
     Progress.speedBonus = 0
+    Progress.damageReduction = 0
     Progress.kills = 0
+    -- passive bonuses from purchased armour stack on top
+    for _, id in ipairs(Profile.data.armour) do
+        local a = Armour.get(id)
+        if a then
+            Progress.maxHpBonus = Progress.maxHpBonus + (a.maxHp or 0)
+            Progress.speedBonus = Progress.speedBonus + (a.speed or 0)
+            Progress.dmgBonus = Progress.dmgBonus + (a.dmg or 0)
+            Progress.damageReduction = Progress.damageReduction + (a.reduce or 0)
+        end
+    end
+    if Progress.damageReduction > 0.8 then Progress.damageReduction = 0.8 end
 end
 
 function Progress.dungeon() return Dungeons[Progress.currentDungeon] end

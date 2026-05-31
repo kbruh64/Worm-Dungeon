@@ -9,7 +9,10 @@ local Game = require("src.states.game")
 local Reward = require("src.states.reward")
 local Victory = require("src.states.victory")
 local SettingsState = require("src.states.settings")
+local Shop = require("src.states.shop")
+local QuestsState = require("src.states.quests")
 local Settings = require("src.settings")
+local Profile = require("src.profile")
 local Audio = require("src.audio")
 local FX = require("src.fx")
 
@@ -38,6 +41,7 @@ function love.load()
     canvas:setFilter("nearest", "nearest")
 
     Settings.load()
+    Profile.load()
     Audio.load()
     FX.shakeEnabled = Settings.data.shake
     if Settings.data.fullscreen then love.window.setFullscreen(true) end
@@ -63,6 +67,8 @@ function love.load()
     sm:register("reward", Reward)
     sm:register("victory", Victory)
     sm:register("settings", SettingsState)
+    sm:register("shop", Shop)
+    sm:register("quests", QuestsState)
     sm:switch("menu")
 
     _G.SM = sm
@@ -87,9 +93,12 @@ local function drawScaled()
     love.graphics.setCanvas({ canvas, stencil = true })
     love.graphics.clear(0.04, 0.05, 0.08, 1)
     sm:draw()
-    if Settings.data.crt and vignette then
+    -- vignette is always on for mood; CRT glow stacks a second pass for a
+    -- heavier edge-darkening.
+    if vignette then
         love.graphics.setColor(1, 1, 1, 1)
         love.graphics.draw(vignette, 0, 0)
+        if Settings.data.crt then love.graphics.draw(vignette, 0, 0) end
     end
     love.graphics.setCanvas()
 

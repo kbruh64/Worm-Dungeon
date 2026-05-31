@@ -115,6 +115,9 @@ end
 
 function Worm:damage(n)
     if self.invuln > 0 then return end
+    if self.damageReduction and self.damageReduction > 0 then
+        n = n * (1 - self.damageReduction)
+    end
     self.hp = self.hp - n
     self.invuln = INVULN_TIME
     Audio.play("hurt")

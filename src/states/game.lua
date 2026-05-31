@@ -7,6 +7,7 @@ local FX = require("src.fx")
 local Room = require("src.dungeons.room")
 local Audio = require("src.audio")
 local Options = require("src.options")
+local Profile = require("src.profile")
 
 local Game = {}
 
@@ -108,6 +109,7 @@ function Game:enter()
         worm = Worm.new(0, 0)
     end
     worm.maxHp = baseMax
+    worm.damageReduction = Progress.damageReduction
     if Progress.consumeHealRequest() then worm.hp = worm.maxHp end
     worm.hp = math.min(worm.hp, worm.maxHp)
     if worm.hp < worm.maxHp then worm.hp = math.min(worm.maxHp, worm.hp + 15) end
@@ -221,11 +223,15 @@ function Game:update(dt)
         if enemies[i].dead then
             worm.kills = worm.kills + 1
             Progress.kills = Progress.kills + 1
+            Profile.addKill()
             table.remove(enemies, i)
         end
     end
 
-    if worm.hp <= 0 then Progress.reset(); worm = nil; SM:switch("menu"); return end
+    -- track best combo for the combo quests
+    Profile.recordCombo(worm.comboCount)
+
+    if worm.hp <= 0 then Profile.save(); Progress.reset(); worm = nil; SM:switch("menu"); return end
 
     -- wave progression
     if #enemies == 0 and not room.exitOpen then
@@ -252,6 +258,7 @@ function Game:update(dt)
         end
     end
     if room.exitOpen and room:exitHit(worm.x, worm.y, worm.w, worm.h) then
+        Profile.clearedDungeon(Progress.dungeon().boss)
         SM:switch("reward")
     end
 end
@@ -431,7 +438,7 @@ local function pauseKey(key)
     elseif key == "return" or key == "space" then
         if pauseSel == resumeIdx then Audio.play("select"); paused = false
         elseif pauseSel == quitIdx then
-            Audio.play("select"); Progress.reset(); worm = nil; SM:switch("menu")
+            Audio.play("select"); Profile.save(); Progress.reset(); worm = nil; SM:switch("menu")
         elseif Options.items[pauseSel].kind == "toggle" then
             Options.adjust(pauseSel, 1)
         end
